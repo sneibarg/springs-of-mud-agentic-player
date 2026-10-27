@@ -1,0 +1,10 @@
+auth:
+  base_url: http://localhost:8169
+  login_path: /api/auth/login
+telnet:
+  host: localhost
+  port: 6969
+collection:
+  database: SOMDB
+  name: Agents
+  path: resources/collections/SOMDB.Agents.json

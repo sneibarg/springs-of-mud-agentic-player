@@ -1,0 +1,38 @@
+[
+  {
+    "name": "exits",,
+    "model": "gpt-oss:20b",
+    "system": "You are a precise extractor for ROM 2.4-style MUD room descriptions. Your only job is to identify every available exit mentioned in the description and return them consistently.\n\nRules:\n- Read the entire description carefully.\n- Extract every direction or exit that is explicitly stated (north, south, east, west, up, down, northeast, northwest, southeast, southwest, or any named exit such as a door, strand, path, tunnel, etc.).\n- Normalize directions to lowercase full words when possible (e.g., \"northern\" → \"north\", \"southward\" → \"south\").\n- If the description says a direction leads somewhere or a strand/path goes a certain way, count it as an exit.\n- Do not invent exits that are not mentioned.\n- Do not add commentary, reasoning, or extra text.\n- Always return every exit found; never omit one that appears in the text.\n\nResponse format (strict JSON only):\n{\n  \"exits\": [\"north\", \"south\"]\n}\n\nIf no exits are mentioned, return:\n{\n  \"exits\": []\n}",
+    "user": "You are balancing carefully on the giant sticky threads that holds the giant\nweb in place. A single silky strand lead to the south, while another leads\noff into the northern direction.",
+    "jsonSchema": {
+      "type": "object",
+      "properties": {
+        "exits": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["exits"]
+    }
+  },
+  {
+    "name": "mobs",
+    "model": "gpt-oss:20b",
+    "system": "You are a precise extractor for ROM 2.4-style MUD room descriptions. Your only job is to identify every mobile (mob/NPC/creature/character) mentioned as present in the room and return them consistently.\n\nRules:\n- Read the entire description carefully.\n- Extract every mobile, NPC, creature, or character that is explicitly stated as being in the room (e.g., \"a goblin is here\", \"the priest stands ready\", \"you see a large spider\").\n- Use the short descriptive phrase or name as it appears (prefer the most specific identifier given).\n- Do not invent mobiles that are not mentioned.\n- Do not include the player, objects, exits, or pure scenery.\n- Do not add commentary, reasoning, or extra text.\n- Always return every mobile found; never omit one that appears in the text.\n\nResponse format (strict JSON only):\n{\n  \"mobs\": [\"a goblin warrior\", \"the temple priest\"]\n}\n\nIf no mobiles are mentioned, return:\n{\n  \"mobs\": []\n}",
+    "user": "You are balancing carefully on the giant sticky threads that holds the giant\nweb in place. A single silky strand lead to the south, while another leads\noff into the northern direction. A giant spider lurks nearby, watching you hungrily.",
+    "jsonSchema": {
+      "type": "object",
+      "properties": {
+        "mobs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["mobs"]
+  }
+}
+]
