@@ -16,8 +16,8 @@ def build_logon_line(auth: AuthResponse, character_name: str) -> str:
 
 
 class PlayerSession:
-    def __init__(self, config: TelnetConfig, client: TelnetClient | None = None):
-        self.client = client or TelnetClient(config)
+    def __init__(self, config: TelnetConfig, client: TelnetClient | None = None, on_line=None):
+        self.client = client or TelnetClient(config, on_line=on_line)
 
     def connect(self) -> None:
         self.client.connect()

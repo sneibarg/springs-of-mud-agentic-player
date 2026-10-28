@@ -1,0 +1,16 @@
+[
+  {
+    "name": "SpringsOfMUD",
+    "server_url": "http://localhost:8169",
+    "account_name": "sneibarg",
+    "password": "Y2hhbmdlaXQ=",
+    "telnet_host": "malboji",
+    "telnet_port": "6969"
+  },
+  {
+    "name": "SpringsOfMUD-alt",
+    "server_url": "http://localhost:8169",
+    "account_name": "neibarge",
+    "password": "Y2hhbmdlaXQ="
+  }
+]

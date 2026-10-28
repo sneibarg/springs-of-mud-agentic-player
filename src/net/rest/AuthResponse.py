@@ -1,11 +1,12 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
 class CharacterSummary:
     id: str
     name: str
+    level: Optional[int] = None
 
     @classmethod
     def from_json(cls, data: Dict[str, Any]) -> "CharacterSummary":
@@ -15,7 +16,7 @@ class CharacterSummary:
         name = str(data.get("name", "")).strip()
         if not character_id or not name:
             raise ValueError("Character entry requires id and name")
-        return cls(id=character_id, name=name)
+        return cls(id=character_id, name=name, level=_character_level(data))
 
 
 @dataclass
@@ -34,6 +35,13 @@ class AuthResponse:
                 return character
         known = ", ".join(character.name for character in self.player_character_list) or "(none)"
         raise LookupError(f"Character '{name}' not found. Known characters: {known}")
+
+    def lowest_level_character(self) -> CharacterSummary:
+        """The character with the smallest level. Equal levels use the name."""
+        ranked = [character for character in self.player_character_list if character.level is not None]
+        if not ranked:
+            raise LookupError("No character with a level is available.")
+        return min(ranked, key=lambda character: (character.level, character.name.lower()))
 
     @classmethod
     def from_json(cls, data: Dict[str, Any]) -> "AuthResponse":
@@ -56,3 +64,9 @@ class AuthResponse:
             email_address=str(data.get("emailAddress", "") or ""),
             player_character_list=characters,
         )
+
+
+def _character_level(data: Dict[str, Any]) -> Optional[int]:
+    if "level" not in data or data.get("level") is None or data.get("level") == "":
+        return None
+    return int(data["level"])

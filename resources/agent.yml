@@ -4,7 +4,19 @@ auth:
 telnet:
   host: localhost
   port: 6969
+  replace_existing: Y
+knowledge:
+  base_url: http://localhost:8169
+  path: /api/v1/agent-knowledge
+ollama:
+  base_url: http://localhost:9081
+  path: /ollama/completions
 collection:
   database: SOMDB
   name: Agents
   path: resources/collections/SOMDB.Agents.json
+connections:
+  path: resources/connections.json
+control:
+  host: 127.0.0.1
+  port: 9711

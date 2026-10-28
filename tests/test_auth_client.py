@@ -55,7 +55,27 @@ class TestAuthClient(unittest.TestCase):
         self.assertEqual(client.get_auth_headers(), {"Authorization": "Bearer jwt-token"})
         self.assertTrue(client.is_authenticated())
         self.assertEqual(auth.character_named("example").id, "char-1")
+        self.assertIsNone(auth.character_named("example").level)
         self.assertFalse(hasattr(auth, "password"))
+
+    def test_lowest_level_character_is_selected_from_the_login_list(self):
+        def post(url, json, timeout):
+            return _Response(
+                {
+                    "id": "account-1",
+                    "accountName": "sneibarg",
+                    "playerCharacterList": [
+                        {"id": "char-1", "name": "Fizban", "level": 60},
+                        {"id": "char-2", "name": "Janky", "level": 8},
+                    ],
+                },
+                {},
+            )
+
+        auth = AuthClient(post=post).login("sneibarg", "secret")
+        character = auth.lowest_level_character()
+        self.assertEqual(character.name, "Janky")
+        self.assertEqual(character.level, 8)
 
     def test_bearer_prefix_is_not_doubled(self):
         def post(url, json, timeout):

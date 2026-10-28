@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import logging
+import socket
+import threading
+
 from dataclasses import dataclass
 from queue import Empty, Queue
 from typing import Callable, Optional
 
-import socket
-import threading
+
+logger = logging.getLogger(__name__)
 
 IAC = 255
 DONT = 254
@@ -28,9 +32,16 @@ class TelnetConfig:
 class TelnetClient:
     """Threaded telnet client. Negotiation defaults match springs-of-mud-ui."""
 
-    def __init__(self, cfg: TelnetConfig, *, on_status: Optional[Callable[[str], None]] = None):
+    def __init__(
+        self,
+        cfg: TelnetConfig,
+        *,
+        on_status: Optional[Callable[[str], None]] = None,
+        on_line: Optional[Callable[[str], None]] = None,
+    ):
         self.cfg = cfg
         self._on_status = on_status
+        self._on_line = on_line
         self._sock: Optional[socket.socket] = None
         self._rx_thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
@@ -189,6 +200,16 @@ class TelnetClient:
         line = self._text_buf.decode("utf-8", errors="replace")
         self._in_lines.put(line)
         self._text_buf.clear()
+        self._publish(line)
+
+    def _publish(self, line: str) -> None:
+        callback = self._on_line
+        if callback is None:
+            return
+        try:
+            callback(line)
+        except Exception as exc:
+            logger.warning("Telnet line observer failed: %s", exc.__class__.__name__)
 
     def _send_iac(self, cmd: int, opt: int) -> None:
         if not self._sock:

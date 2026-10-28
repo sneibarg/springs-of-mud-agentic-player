@@ -219,3 +219,12 @@ __marimo__/
 
 .idea
 .idea/*
+
+# Session review written by the memory control command
+working-memory.json
+
+# Gameplay transcript written by the output control command
+session.txt
+
+# Live working-memory reviews written by tests
+tests/output/

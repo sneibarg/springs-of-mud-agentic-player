@@ -36,6 +36,14 @@ class TestAgentCollection(unittest.TestCase):
         self.assertEqual(config.collection_path, ROOT / "resources" / "collections" / "SOMDB.Agents.json")
         self.assertEqual(config.auth_base_url, "http://localhost:8169")
         self.assertEqual(config.telnet_port, 6969)
+        self.assertEqual(config.telnet_replace_existing, "Y")
+        self.assertEqual(config.knowledge_base_url, "http://localhost:8169")
+        self.assertEqual(config.knowledge_path, "/api/v1/agent-knowledge")
+        self.assertEqual(config.ollama_base_url, "http://localhost:9081")
+        self.assertEqual(config.ollama_path, "/ollama/completions")
+        self.assertEqual(config.connections_path, ROOT / "resources" / "connections.json")
+        self.assertEqual(config.control_host, "127.0.0.1")
+        self.assertEqual(config.control_port, 9711)
 
     def test_duplicate_name_is_rejected(self):
         document = {
@@ -66,6 +74,19 @@ class TestAgentCollection(unittest.TestCase):
             self.assertFalse(registry.get("sleeper").enabled)
             with self.assertRaises(ValueError):
                 registry.require("sleeper")
+
+    def test_control_host_must_be_loopback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "agent.yml"
+            path.write_text("control:\n  host: 10.0.0.1\n  port: 9711\n", encoding="utf-8")
+            with self.assertRaises(ValueError) as caught:
+                AgentConfig.load(str(path))
+            self.assertEqual(str(caught.exception), "Control host must be localhost")
+
+            path.write_text("control:\n  host: localhost\n  port: 0\n", encoding="utf-8")
+            with self.assertRaises(ValueError) as caught:
+                AgentConfig.load(str(path))
+            self.assertEqual(str(caught.exception), "control.port must be a TCP port")
 
 
 if __name__ == "__main__":

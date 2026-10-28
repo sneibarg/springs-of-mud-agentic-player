@@ -1,6 +1,6 @@
 [
   {
-    "name": "exits",,
+    "name": "exits",
     "model": "gpt-oss:20b",
     "system": "You are a precise extractor for ROM 2.4-style MUD room descriptions. Your only job is to identify every available exit mentioned in the description and return them consistently.\n\nRules:\n- Read the entire description carefully.\n- Extract every direction or exit that is explicitly stated (north, south, east, west, up, down, northeast, northwest, southeast, southwest, or any named exit such as a door, strand, path, tunnel, etc.).\n- Normalize directions to lowercase full words when possible (e.g., \"northern\" → \"north\", \"southward\" → \"south\").\n- If the description says a direction leads somewhere or a strand/path goes a certain way, count it as an exit.\n- Do not invent exits that are not mentioned.\n- Do not add commentary, reasoning, or extra text.\n- Always return every exit found; never omit one that appears in the text.\n\nResponse format (strict JSON only):\n{\n  \"exits\": [\"north\", \"south\"]\n}\n\nIf no exits are mentioned, return:\n{\n  \"exits\": []\n}",
     "user": "You are balancing carefully on the giant sticky threads that holds the giant\nweb in place. A single silky strand lead to the south, while another leads\noff into the northern direction.",
@@ -14,7 +14,9 @@
           }
         }
       },
-      "required": ["exits"]
+      "required": [
+        "exits"
+      ]
     }
   },
   {
@@ -32,7 +34,685 @@
           }
         }
       },
-      "required": ["mobs"]
+      "required": [
+        "mobs"
+      ]
+    }
+  },
+  {
+    "name": "commands",
+    "model": "gpt-oss:20b",
+    "system": "You are a precise extractor for ROM 2.4-style MUD command lists. Your only job is to read the output of the commands command and return every command name it shows.\n\nRules:\n- The server prints names in columns. Each column is 12 characters wide, and each line holds up to 6 columns.\n- A name is left-aligned in its column and cut off at 12 characters. A 12-character name touches the next column with no space between them. Slice the line into 12-character columns. Do not split the line on spaces only.\n- Strip each column and lowercase it.\n- Keep the first time you see a name. Drop later duplicates.\n- Ignore blank lines.\n- Ignore a playing prompt such as <20hp 100m 100mv>.\n- Ignore a pager line [Hit Enter to continue].\n- Do not invent a name that is not in a column.\n- Do not complete a name that was cut off at 12 characters.\n- Do not add commentary, reasoning, or extra text.\n\nResponse format (strict JSON only):\n{\n  \"commands\": [\"look\", \"help\", \"areas\"]\n}\n\nIf no commands are shown, return:\n{\n  \"commands\": []\n}",
+    "user": "look        help        areas       who         north       get         \ndrop        inventory   say         kill        consider    description ",
+    "jsonSchema": {
+      "type": "object",
+      "properties": {
+        "commands": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "commands"
+      ]
+    }
+  },
+  {
+    "name": "help",
+    "model": "gpt-oss:20b",
+    "system": "You are a precise extractor for ROM 2.4-style MUD help pages. Your only job is to read the output of a help command and return each help topic on that page.\n\nRules:\n- A topic begins with a keyword line, then the help text.\n- A line made only of equal signs separates topics. Do not include that line in the text.\n- Keep the keyword as printed.\n- Keep the help text as printed, including its line breaks, after the keyword line.\n- If the page is exactly \"No help on that word.\", return no topics and set missing to true.\n- Otherwise set missing to false.\n- Ignore a playing prompt such as <20hp 100m 100mv>.\n- Ignore a pager line [Hit Enter to continue].\n- Do not invent help text.\n- Do not add commentary, reasoning, or extra text.\n\nResponse format (strict JSON only):\n{\n  \"missing\": false,\n  \"topics\": [\n    {\"keyword\": \"LOOK\", \"text\": \"Look at a room, a person, or an object.\"}\n  ]\n}\n\nIf there is no help, return:\n{\n  \"missing\": true,\n  \"topics\": []\n}",
+    "user": "LOOK\nLook at a room, a person, or an object.",
+    "jsonSchema": {
+      "type": "object",
+      "properties": {
+        "missing": {
+          "type": "boolean"
+        },
+        "topics": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "keyword": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "keyword",
+              "text"
+            ]
+          }
+        }
+      },
+      "required": [
+        "missing",
+        "topics"
+      ]
+    }
+  },
+  {
+    "name": "areas",
+    "model": "gpt-oss:20b",
+    "system": "You are a precise extractor for ROM 2.4-style MUD area lists. Your only job is to read the output of the areas command and return every area.\n\nRules:\n- The server prints areas in columns. Each column is 39 characters wide, and each line holds up to 2 columns.\n- Slice each line into 39-character columns. Do not split the line on spaces only. A long credit fills the column and touches the next one.\n- Strip each column. Skip empty columns.\n- A column uses one of these forms:\n  - [levels] author: name\n  - author: name\n  - name\n- levels is the text inside the brackets, without the brackets.\n- When a colon is present, author is the text before the first colon and name is the text after it.\n- When no colon is present, author is empty and the whole column is the name.\n- Ignore blank lines, a playing prompt such as <20hp 100m 100mv>, and [Hit Enter to continue].\n- Do not invent an area.\n- Do not add commentary, reasoning, or extra text.\n\nResponse format (strict JSON only):\n{\n  \"areas\": [\n    {\"name\": \"Temple of Mota\", \"author\": \"Romy\", \"levels\": \"1-5\"}\n  ]\n}\n\nIf no areas are shown, return:\n{\n  \"areas\": []\n}",
+    "user": "[1-5] Romy: Temple of Mota             [10-20] Kahn: Midgaard                 ",
+    "jsonSchema": {
+      "type": "object",
+      "properties": {
+        "areas": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "author": {
+                "type": "string"
+              },
+              "levels": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "author",
+              "levels"
+            ]
+          }
+        }
+      },
+      "required": [
+        "areas"
+      ]
+    }
+  },
+  {
+    "name": "who",
+    "model": "gpt-oss:20b",
+    "system": "You are a precise extractor for ROM 2.4-style MUD who lists. Your only job is to read the output of the who command and return every visible player.\n\nRules:\n- A player line has this shape: [level    race    class] flags name title\n- level is the integer at the start of the brackets.\n- race is the next word inside the brackets.\n- class is the last word inside the brackets. It is a short class abbreviation such as Mag or War, or an immortal rank such as IMM or IMP.\n- flags are the parenthetical marks between the closing bracket and the name, such as (Wizi) or (Incog). Join them with a single space. Use an empty string when there are none.\n- name is the single word after the flags.\n- title is the rest of the line.\n- The line \"Players found: N\" is the count. It is not a player. Put N in playersFound.\n- Ignore blank lines, a playing prompt such as <20hp 100m 100mv>, and [Hit Enter to continue].\n- Do not decide who is agentic. The text does not say that.\n- Do not invent a player.\n- Do not add commentary, reasoning, or extra text.\n\nResponse format (strict JSON only):\n{\n  \"playersFound\": 1,\n  \"players\": [\n    {\"level\": 1, \"race\": \"human\", \"class\": \"Mag\", \"flags\": \"\", \"name\": \"Example\", \"title\": \"the new one\"}\n  ]\n}\n\nIf no players are shown, return:\n{\n  \"playersFound\": 0,\n  \"players\": []\n}",
+    "user": "[1    human    Mag] Example the new one\n[10    elf    War] (Wizi) Marcus the wanderer\nPlayers found: 2",
+    "jsonSchema": {
+      "type": "object",
+      "properties": {
+        "playersFound": {
+          "type": "integer"
+        },
+        "players": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "level": {
+                "type": "integer"
+              },
+              "race": {
+                "type": "string"
+              },
+              "class": {
+                "type": "string"
+              },
+              "flags": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "level",
+              "race",
+              "class",
+              "flags",
+              "name",
+              "title"
+            ]
+          }
+        }
+      },
+      "required": [
+        "playersFound",
+        "players"
+      ]
+    }
+  },
+  {
+    "name": "look",
+    "model": "gpt-oss:20b",
+    "system": "You are a precise extractor for ROM 2.4-style MUD look output. Your only job is to read one look reply and return the room, its exits, its items, and the beings standing in it.\n\nRules:\n- Ignore a playing prompt such as <20hp 100m 100mv> and a pager line [Hit Enter to continue].\n- The first remaining line is the room name. If that line is wrapped in brackets, such as [Temple of Mota], the name is the text inside the brackets and there is no description.\n- The description is the prose that follows the name. It is often indented with tabs. Strip leading tabs. Stop the description at the first item, exit header, or being.\n- An item line begins with four spaces. Keep the text after those spaces. Do not treat a being or an exit as an item.\n- An exit block starts at a line that begins with \"Obvious exits\". Following lines start with North, East, South, West, Up, or Down, then spaces, then a hyphen, then the destination. Return each direction in lowercase. Do not read exits out of the room description.\n- Every other non-empty line is one being.\n- If a being line ends with one of these phrases, the name is the text before it and the pose is the word shown:\n  - \" is DEAD!!\" -> dead\n  - \" is mortally wounded.\" -> mortally wounded\n  - \" is incapacitated.\" -> incapacitated\n  - \" is lying here stunned.\" -> stunned\n  - \" is sleeping here.\" -> sleeping\n  - \" is resting here.\" -> resting\n  - \" is sitting here.\" -> sitting\n  - \" is here, fighting \" -> fighting, and detail is the text after that phrase\n  - \" is here.\" -> here\n- For fighting, keep detail as printed, including YOU! or a name. For every other pose, detail is an empty string.\n- If a being line has none of those phrases, it is a long description. Use the whole line as the name, pose \"here\", and an empty detail.\n- The server capitalizes the first letter of a being line. Classify kind from the first word, compared in lowercase:\n  - a, an, the, or some -> mobile\n  - any other word -> npc\n- Do not call a being a player. A later step matches names against the who list.\n- Keep a leading tag such as (Invis) or (Wizi) on the name.\n- These replies are not a room. Return empty fields for them: \"You can't see anything but stars!\" and \"You can't see anything; you're sleeping!\"\n- Do not invent a room, exit, item, or being.\n- Do not add commentary, reasoning, or extra text.\n\nResponse format (strict JSON only):\n{\n  \"name\": \"Temple of Mota\",\n  \"description\": \"A quiet stone temple.\",\n  \"exits\": [\"north\", \"east\"],\n  \"items\": [\"a fountain bubbles quietly.\"],\n  \"beings\": [\n    {\"name\": \"A goblin warrior\", \"kind\": \"mobile\", \"pose\": \"here\", \"detail\": \"\"}\n  ]\n}\n\nIf the reply has no room, return:\n{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"exits\": [],\n  \"items\": [],\n  \"beings\": []\n}",
+    "user": "Temple of Mota\n\t\tA quiet stone temple.\n    a fountain bubbles quietly.\nObvious exits:\nNorth - Temple Square\nEast  - Market\nA goblin warrior is here.\nMarcus is sitting here.\nExample is here, fighting a goblin warrior.",
+    "jsonSchema": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "exits": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "beings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "pose": {
+                "type": "string"
+              },
+              "detail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "kind",
+              "pose",
+              "detail"
+            ]
+          }
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "exits",
+        "items",
+        "beings"
+      ]
+    }
+  },
+  {
+    "name": "score",
+    "model": "gpt-oss:20b",
+    "system": "You are a precise extractor for ROM 2.4-style MUD score output. Your only job is to read the score and return the requested facts.\n\nRequest: {intent}\n\nRules:\n- The user message is the score text.\n- Return only the JSON keys in the response format. Do not add any other key.\n- Copy each value from the score text. Do not copy the example values and do not invent a number or phrase that is not printed.\n- Use null when a requested number or optional string is not printed.\n- Hunger, thirst, and drunkenness are true only when the score prints \"You are hungry.\", \"You are thirsty.\", or \"You are drunk.\" Otherwise they are false.\n- Ignore a playing prompt such as <20hp 100m 100mv> and a pager line [Hit Enter to continue].\n- Do not add commentary, reasoning, or extra text.\n\nScore lines:\n- \"You are <name> <title>, level <level>, <ageYears> years old (<hoursPlayed> hours).\" The name is the first word. The title is the text after the name, up to \", level\", with surrounding spaces removed.\n- \"You are trusted at level <trust>.\" This line is absent when trust equals level. Leave trust null then. Do not copy level into trust.\n- \"Race: <race>  Sex: <sex>  Class: <class>.\" Sex is male, female, or sexless. Class is the full class name.\n- \"You have <hit>/<maxHit> hit, <mana>/<maxMana> mana, <movement>/<maxMovement> movement.\"\n- \"You have <practices> practices and <trains> training sessions.\"\n- \"You are carrying <items>/<maxItems> items with weight <weight>/<maxWeight> pounds.\"\n- \"Str: <strength>(<maxStrength>)  Int: <intelligence>(<maxIntelligence>)  Wis: <wisdom>(<maxWisdom>)  Dex: <dexterity>(<maxDexterity>)  Con: <constitution>(<maxConstitution>).\"\n- \"You have scored <experience> exp, and have <gold> gold and <silver> silver coins.\"\n- \"You need <expToLevel> exp to level.\" This is the experience still needed, not the experience already scored.\n- \"Wimpy set to <wimpy> hit points.\"\n- One position sentence. Map \"You are DEAD!!\" to dead, \"You are mortally wounded.\" to mortally wounded, \"You are incapacitated.\" to incapacitated, \"You are stunned.\" to stunned, \"You are sleeping.\" to sleeping, \"You are resting.\" to resting, \"You are sitting.\" to sitting, \"You are fighting.\" to fighting, and \"You are standing.\" to standing.\n- \"Armor: pierce: <armorPierce>  bash: <armorBash>  slash: <armorSlash>  magic: <armorMagic>.\" This line is absent below level 25. Those four numbers are null when it is absent.\n- Four sentences, in order, ending in piercing, bashing, slashing, and magic. Copy the words between \"You are \" and the final period into acPierce, acBash, acSlash, and acMagic.\n- \"Holy Light: on\" or \"Holy Light: off\", then optional \"Invisible: level <invisLevel>\" and \"Incognito: level <incogLevel>.\" Missing clauses are null.\n- \"Hitroll: <hitroll>  Damroll: <damroll>.\" Both are null when the line is absent.\n- \"Alignment: <alignment>. You are <alignmentWord>.\" or \"You are <alignmentWord>.\" alignment is null when the number is not printed. alignmentWord is angelic, saintly, good, kind, neutral, mean, evil, demonic, or satanic.\n- A trailing affects block starts with \"You are affected by the following spells:\" or \"You are not affected by any spells.\" A spell name is the trimmed text after \"Spell: \". A modifier is \": modifies <location> by <amount> for <hours> hours\" or \": modifies <location> by <amount> permanently\". Spaces before \": modifies\" continue the previous spell. permanently sets permanent true and hours null. A spell with no modifier has modifiers []. Use an empty list when no spells are printed.\n\nResponse format (strict JSON only):\n{response}",
+    "user": "{score}",
+    "jsonSchema": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "level": {
+          "type": "integer"
+        },
+        "ageYears": {
+          "type": "integer"
+        },
+        "hoursPlayed": {
+          "type": "integer"
+        },
+        "trust": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "race": {
+          "type": "string"
+        },
+        "sex": {
+          "type": "string"
+        },
+        "class": {
+          "type": "string"
+        },
+        "hit": {
+          "type": "integer"
+        },
+        "maxHit": {
+          "type": "integer"
+        },
+        "mana": {
+          "type": "integer"
+        },
+        "maxMana": {
+          "type": "integer"
+        },
+        "movement": {
+          "type": "integer"
+        },
+        "maxMovement": {
+          "type": "integer"
+        },
+        "practices": {
+          "type": "integer"
+        },
+        "trains": {
+          "type": "integer"
+        },
+        "items": {
+          "type": "integer"
+        },
+        "maxItems": {
+          "type": "integer"
+        },
+        "weight": {
+          "type": "integer"
+        },
+        "maxWeight": {
+          "type": "integer"
+        },
+        "strength": {
+          "type": "integer"
+        },
+        "maxStrength": {
+          "type": "integer"
+        },
+        "intelligence": {
+          "type": "integer"
+        },
+        "maxIntelligence": {
+          "type": "integer"
+        },
+        "wisdom": {
+          "type": "integer"
+        },
+        "maxWisdom": {
+          "type": "integer"
+        },
+        "dexterity": {
+          "type": "integer"
+        },
+        "maxDexterity": {
+          "type": "integer"
+        },
+        "constitution": {
+          "type": "integer"
+        },
+        "maxConstitution": {
+          "type": "integer"
+        },
+        "experience": {
+          "type": "integer"
+        },
+        "gold": {
+          "type": "integer"
+        },
+        "silver": {
+          "type": "integer"
+        },
+        "expToLevel": {
+          "type": "integer"
+        },
+        "wimpy": {
+          "type": "integer"
+        },
+        "drunk": {
+          "type": "boolean"
+        },
+        "thirsty": {
+          "type": "boolean"
+        },
+        "hungry": {
+          "type": "boolean"
+        },
+        "position": {
+          "type": "string"
+        },
+        "armorPierce": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "armorBash": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "armorSlash": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "armorMagic": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "acPierce": {
+          "type": "string"
+        },
+        "acBash": {
+          "type": "string"
+        },
+        "acSlash": {
+          "type": "string"
+        },
+        "acMagic": {
+          "type": "string"
+        },
+        "holyLight": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "invisLevel": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "incogLevel": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "hitroll": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "damroll": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "alignment": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "alignmentWord": {
+          "type": "string"
+        },
+        "affects": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "modifiers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "location": {
+                      "type": "string"
+                    },
+                    "amount": {
+                      "type": "integer"
+                    },
+                    "hours": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "permanent": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "location",
+                    "amount",
+                    "hours",
+                    "permanent"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "name",
+              "modifiers"
+            ]
+          }
+        }
+      }
+    },
+    "tokens": {
+      "identity": {
+        "text": "name, title, level, age, and hours played",
+        "example": {
+          "name": "Example",
+          "title": "the new one",
+          "level": 12,
+          "ageYears": 17,
+          "hoursPlayed": 3
+        }
+      },
+      "trust": {
+        "text": "trust level",
+        "example": null
+      },
+      "race": {
+        "text": "race, sex, and class",
+        "example": {
+          "race": "human",
+          "sex": "male",
+          "class": "mage"
+        }
+      },
+      "hitPoints": {
+        "text": "hit points",
+        "example": {
+          "hit": 20,
+          "maxHit": 20
+        }
+      },
+      "mana": {
+        "text": "mana",
+        "example": {
+          "mana": 100,
+          "maxMana": 100
+        }
+      },
+      "movement": {
+        "text": "movement",
+        "example": {
+          "movement": 100,
+          "maxMovement": 100
+        }
+      },
+      "practices": {
+        "text": "practices and training sessions",
+        "example": {
+          "practices": 5,
+          "trains": 2
+        }
+      },
+      "carrying": {
+        "text": "items and weight carried",
+        "example": {
+          "items": 3,
+          "maxItems": 20,
+          "weight": 4,
+          "maxWeight": 150
+        }
+      },
+      "attributes": {
+        "text": "strength, intelligence, wisdom, dexterity, and constitution",
+        "example": {
+          "strength": 13,
+          "maxStrength": 18,
+          "intelligence": 16,
+          "maxIntelligence": 18,
+          "wisdom": 12,
+          "maxWisdom": 18,
+          "dexterity": 14,
+          "maxDexterity": 18,
+          "constitution": 13,
+          "maxConstitution": 18
+        }
+      },
+      "experience": {
+        "text": "experience scored",
+        "example": 1200
+      },
+      "expToLevel": {
+        "text": "the experience needed to level",
+        "example": 800
+      },
+      "gold": {
+        "text": "gold",
+        "example": 10
+      },
+      "silver": {
+        "text": "silver",
+        "example": 40
+      },
+      "wimpy": {
+        "text": "wimpy",
+        "example": 0
+      },
+      "condition": {
+        "text": "hunger, thirst, and drunkenness",
+        "example": {
+          "hungry": true,
+          "thirsty": false,
+          "drunk": false
+        }
+      },
+      "position": {
+        "text": "position",
+        "example": "standing"
+      },
+      "armorClass": {
+        "text": "armor class",
+        "example": {
+          "armorPierce": null,
+          "armorBash": null,
+          "armorSlash": null,
+          "armorMagic": null,
+          "acPierce": "armored against piercing",
+          "acBash": "armored against bashing",
+          "acSlash": "armored against slashing",
+          "acMagic": "armored against magic"
+        }
+      },
+      "holyLight": {
+        "text": "holy light, invisibility, and incognito",
+        "example": {
+          "holyLight": null,
+          "invisLevel": null,
+          "incogLevel": null
+        }
+      },
+      "hitroll": {
+        "text": "hitroll and damroll",
+        "example": {
+          "hitroll": null,
+          "damroll": null
+        }
+      },
+      "alignment": {
+        "text": "alignment",
+        "example": {
+          "alignment": 0,
+          "alignmentWord": "neutral"
+        }
+      },
+      "affects": {
+        "text": "spells affecting you",
+        "example": [
+          {
+            "name": "armor",
+            "modifiers": [
+              {
+                "location": "armor class",
+                "amount": -20,
+                "hours": 12,
+                "permanent": false
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "affects",
+    "model": "gpt-oss:20b",
+    "system": "You are a precise extractor for ROM 2.4-style MUD affects output. Your only job is to read one affects reply and return the spells it lists.\n\nModes:\n- Full read. If the affects text has no Seek line, or the first line is exactly \"Seek: all\", return affected and every spell.\n- Seek. If the first line is \"Seek: piece, piece\", the rest of that line names one or more pieces, separated by commas. Return only the spells and modifiers that answer those pieces. The Seek line is a request placed before the affects text. It is not a line the game printed.\n\nRules:\n- Ignore a playing prompt such as <20hp 100m 100mv> and a pager line [Hit Enter to continue].\n- \"You are not affected by any spells.\" means affected is false and spells is [].\n- Otherwise the reply starts with \"You are affected by the following spells:\" and affected is true.\n- A spell line starts with \"Spell: \". The name is the text after \"Spell: \", with surrounding spaces removed. The server may pad the name to 15 characters before the colon. Those spaces are not part of the name.\n- A modifier is \": modifies <location> by <amount> for <hours> hours\" or \": modifies <location> by <amount> permanently\".\n- A line that is spaces followed by \": modifies\" is another modifier of the previous spell. That padding is 22 spaces.\n- A spell with no modifier clause has modifiers []. Below level 20 the server prints only \"Spell: <name>\". A leftover spell bit is also printed that way, with no modifier.\n- location is the printed text, including \"(unknown)\" when the server prints that.\n- amount is an integer and may be negative.\n- \"permanently\" sets permanent true and hours null. \"for N hours\" sets permanent false and hours to N.\n- Do not invent a spell or a modifier.\n- Do not add commentary, reasoning, or extra text.\n\nSeek matching:\n- A piece that exactly matches a printed spell name returns that whole spell.\n- A piece that exactly matches a modifier location returns only spells with that location, and only the matching modifiers.\n- Prefer an exact spell name over a location. \"armor\" is the spell armor. \"armor class\" is the location.\n- \"duration\" or \"hours\", together with a spell or a location, keeps hours and permanent on the modifiers that match.\n- Several pieces are combined. Two spell names return both spells. A spell name plus a location returns that spell's modifiers for that location.\n- If nothing matches, return {\"spells\": []}. Do not set affected to false unless the reply says \"You are not affected by any spells.\" or the request asks whether any spells are active.\n- On a seek read, omit affected unless the piece asks whether the character is affected.\n\nResponse format for a full read (strict JSON only):\n{\n  \"affected\": true,\n  \"spells\": [\n    {\n      \"name\": \"giant strength\",\n      \"modifiers\": [\n        {\n          \"location\": \"strength\",\n          \"amount\": 3,\n          \"hours\": 5,\n          \"permanent\": false\n        },\n        {\n          \"location\": \"dexterity\",\n          \"amount\": 2,\n          \"hours\": null,\n          \"permanent\": true\n        }\n      ]\n    },\n    {\n      \"name\": \"armor\",\n      \"modifiers\": [\n        {\n          \"location\": \"armor class\",\n          \"amount\": -20,\n          \"hours\": 12,\n          \"permanent\": false\n        }\n      ]\n    },\n    {\n      \"name\": \"sanctuary\",\n      \"modifiers\": []\n    }\n  ]\n}\n\nIf no spells are present, return:\n{\"affected\": false, \"spells\": []}\n\nA seek read uses the same spell objects and omits the rest. \"Seek: strength\" on the sample above returns:\n{\n  \"spells\": [\n    {\n      \"name\": \"giant strength\",\n      \"modifiers\": [\n        {\n          \"location\": \"strength\",\n          \"amount\": 3,\n          \"hours\": 5,\n          \"permanent\": false\n        }\n      ]\n    }\n  ]\n}",
+    "user": "You are affected by the following spells:\nSpell: giant strength : modifies strength by 3 for 5 hours\n                      : modifies dexterity by 2 permanently\nSpell: armor          : modifies armor class by -20 for 12 hours\nSpell: sanctuary",
+    "jsonSchema": {
+      "type": "object",
+      "properties": {
+        "affected": {
+          "type": "boolean"
+        },
+        "spells": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "modifiers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "location": {
+                      "type": "string"
+                    },
+                    "amount": {
+                      "type": "integer"
+                    },
+                    "hours": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "permanent": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "location",
+                    "amount",
+                    "hours",
+                    "permanent"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "name",
+              "modifiers"
+            ]
+          }
+        }
+      }
+    }
   }
-}
 ]
