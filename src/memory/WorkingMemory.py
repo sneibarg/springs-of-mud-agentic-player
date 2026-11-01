@@ -4,12 +4,14 @@ import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from memory.ConsiderReading import ConsiderReading, parse_consider
-from play.WorldReader import split_look_prefixes
+from memory.ConsiderOpponent import ConsiderOpponent, parse_consider
+from memory.Conversation import Conversation
+from util.SharedUtil import SharedUtil
 
 
 _KINDS = {"player", "mobile", "npc"}
 _FIGHTING_YOU = re.compile(r"^(?P<name>.+) is here, fighting YOU!$", re.IGNORECASE)
+_COLLECTION_FILE = "SOMDB.Memories.json"
 
 
 @dataclass
@@ -40,6 +42,7 @@ class WorkingMemory:
     """Short-lived memory for one play session.
 
     This is not saved with world knowledge. Call `clear` when the session ends.
+    `write_collection` copies the session into the local Memories collection.
     """
 
     def __init__(self):
@@ -47,7 +50,8 @@ class WorkingMemory:
         self._rooms: dict[str, SessionRoom] = {}
         self._commands: dict[str, SessionCommand] = {}
         self._command_order: list[str] = []
-        self._considers: dict[str, ConsiderReading] = {}
+        self._considers: dict[str, ConsiderOpponent] = {}
+        self._conversations: dict[tuple[str, str, str], Conversation] = {}
 
     def clear(self) -> None:
         self._beings.clear()
@@ -55,27 +59,14 @@ class WorkingMemory:
         self._commands.clear()
         self._command_order.clear()
         self._considers.clear()
+        self._conversations.clear()
 
-    def remember_player(
-        self,
-        name: str,
-        *,
-        agentic: bool = False,
-        room_name: str = "",
-        auras: list[str] | None = None,
-    ) -> SessionBeing:
+    def remember_player(self, name: str, *, agentic: bool = False, room_name: str = "", auras: list[str] | None = None) -> SessionBeing:
         being = self._upsert(name, "player", room_name, auras)
         being.agentic = agentic
         return being
 
-    def remember_mobile(
-        self,
-        name: str,
-        *,
-        room_name: str = "",
-        aggressive: bool = False,
-        auras: list[str] | None = None,
-    ) -> SessionBeing:
+    def remember_mobile(self, name: str, *, room_name: str = "", aggressive: bool = False, auras: list[str] | None = None) -> SessionBeing:
         being = self._upsert(name, "mobile", room_name, auras)
         if aggressive:
             being.aggressive = True
@@ -139,20 +130,43 @@ class WorkingMemory:
     def commands(self) -> list[SessionCommand]:
         return [self._commands[key] for key in self._command_order]
 
+    def remember_conversation(self, topic: str, location: str, location_name: str, *, participants: list[str] | None = None, interest: int | None = None) -> Conversation:
+        """Remember one conversation.
+
+        The same topic, location, and location name stay one conversation. A
+        later call with participants replaces that list. Omitting interest
+        leaves the stored priority.
+        """
+        draft = Conversation(topic=topic, location=location, location_name=location_name, participants=[] if participants is None else participants, interest=0 if interest is None else interest)
+        stored = self._conversations.get(_conversation_key(draft))
+        if stored is None:
+            self._conversations[_conversation_key(draft)] = draft
+            return draft
+        stored.topic = draft.topic
+        stored.location_name = draft.location_name
+        if participants is not None:
+            stored.participants = draft.participants
+        if interest is not None:
+            stored.set_interest(interest)
+        return stored
+
+    def conversation_for(self, topic: str, location: str, location_name: str) -> Conversation | None:
+        return self._conversations.get((topic.strip().lower(), location.strip().lower(), location_name.strip().lower()))
+
+    def conversations(self) -> list[Conversation]:
+        return sorted(self._conversations.values(), key=lambda conversation: (-conversation.interest, conversation.topic.lower(), conversation.location, conversation.location_name.lower()))
+
     def observe_line(self, line: str, *, room_name: str = "") -> SessionBeing | None:
         """A mobile already fighting you is treated as aggressive."""
+        from play.WorldReader import split_look_prefixes
+
         auras, rest = split_look_prefixes(line)
         match = _FIGHTING_YOU.match(rest)
         if match is None:
             return None
-        return self.remember_mobile(
-            match.group("name").strip(),
-            room_name=room_name,
-            aggressive=True,
-            auras=auras,
-        )
+        return self.remember_mobile(match.group("name").strip(), room_name=room_name, aggressive=True, auras=auras)
 
-    def remember_consider(self, target: str, lines: list[str], *, kind: str, agentic: bool = False) -> ConsiderReading:
+    def remember_consider(self, target: str, lines: list[str], *, kind: str, agentic: bool = False) -> ConsiderOpponent:
         if kind not in _KINDS:
             raise ValueError(f"Consider kind must be player, mobile, or npc, got {kind}")
         reading = parse_consider(target, lines, kind="agentic" if agentic and kind == "player" else kind)
@@ -166,7 +180,7 @@ class WorkingMemory:
     def being_named(self, name: str) -> SessionBeing | None:
         return self._beings.get(name.strip().lower())
 
-    def consider_for(self, name: str) -> ConsiderReading | None:
+    def consider_for(self, name: str) -> ConsiderOpponent | None:
         return self._considers.get(name.strip().lower())
 
     def players(self) -> list[SessionBeing]:
@@ -184,9 +198,9 @@ class WorkingMemory:
     def aggressive_mobiles(self) -> list[SessionBeing]:
         return [being for being in self.mobiles() if being.aggressive]
 
-    def considers(self) -> list[ConsiderReading]:
+    def considers(self) -> list[ConsiderOpponent]:
         seen: set[int] = set()
-        readings: list[ConsiderReading] = []
+        readings: list[ConsiderOpponent] = []
         for reading in self._considers.values():
             if id(reading) in seen:
                 continue
@@ -196,16 +210,7 @@ class WorkingMemory:
 
     def to_review(self) -> dict:
         """A readable snapshot. This is not the world-knowledge document."""
-        return {
-            "players": [_being_review(being) for being in _by_name(self.players())],
-            "agentic_players": [_being_review(being) for being in _by_name(self.agentic_players())],
-            "mobiles": [_being_review(being) for being in _by_name(self.mobiles())],
-            "npcs": [_being_review(being) for being in _by_name(self.npcs())],
-            "aggressive_mobiles": [_being_review(being) for being in _by_name(self.aggressive_mobiles())],
-            "rooms": [_room_review(room) for room in self.rooms()],
-            "commands": [_command_review(command) for command in self.commands()],
-            "considers": [_consider_review(reading) for reading in _by_target(self.considers())],
-        }
+        return {"players": [asdict(being) for being in _by_name(self.players())], "agentic_players": [asdict(being) for being in _by_name(self.agentic_players())], "mobiles": [asdict(being) for being in _by_name(self.mobiles())], "npcs": [asdict(being) for being in _by_name(self.npcs())], "aggressive_mobiles": [asdict(being) for being in _by_name(self.aggressive_mobiles())], "rooms": [asdict(room) for room in self.rooms()], "commands": [asdict(command) for command in self.commands()], "considers": [asdict(reading) for reading in _by_target(self.considers())], "conversations": [asdict(conversation) for conversation in self.conversations()]}
 
     def write_review(self, path: str) -> str:
         """Write to_review() as indented JSON. Returns the path that was written."""
@@ -218,40 +223,47 @@ class WorkingMemory:
         destination.write_text(text, encoding="utf-8")
         return str(destination)
 
+    def to_collection(self, agent_name: str) -> dict:
+        """One Memories document for this session, looked up by `agentName`."""
+        cleaned = str(agent_name or "").strip()
+        if not cleaned:
+            raise ValueError("Working memory collection requires an agent name")
+        document = {"agentName": cleaned}
+        for key, value in self.to_review().items():
+            document[SharedUtil.snake_to_camel(key)] = SharedUtil.camel_keys(value)
+        return document
+
+    def write_collection(self, agent_name: str, path: str | None = None) -> str:
+        """Upsert this session into the local Memories collection.
+
+        Documents are matched on `agentName`, ignoring case. A later dump for
+        the same agent replaces that document and leaves every other agent in
+        place. The default file is `resources/collections/SOMDB.Memories.json`.
+        """
+        if path is not None and not str(path).strip():
+            raise ValueError("Working memory collection path is empty")
+        document = self.to_collection(agent_name)
+        destination = Path(str(path).strip()) if path is not None else default_collection_path()
+        documents = SharedUtil.read_collection(destination)
+        SharedUtil.write_collection(destination, _upsert_agent(documents, document))
+        return str(destination)
+
     def absorb_world(self, knowledge) -> None:
         """Copy the current world snapshot. Does not clear earlier consider results."""
         for player in knowledge.players.values():
             if getattr(player, "self_character", False):
                 continue
-            self.remember_player(
-                player.name,
-                agentic=bool(getattr(player, "agentic", False)),
-                room_name=getattr(player, "room_name", "") or "",
-                auras=_copied_auras(player),
-            )
+            self.remember_player(player.name, agentic=bool(getattr(player, "agentic", False)), room_name=getattr(player, "room_name", "") or "", auras=_copied_auras(player))
         for mobile in knowledge.mobiles.values():
             fighting_you = getattr(mobile, "pose", "") == "fighting" and str(getattr(mobile, "detail", "")).upper().startswith("YOU")
-            self.remember_mobile(
-                mobile.name,
-                room_name=getattr(mobile, "room_name", "") or "",
-                aggressive=fighting_you,
-                auras=_copied_auras(mobile),
-            )
+            self.remember_mobile(mobile.name, room_name=getattr(mobile, "room_name", "") or "", aggressive=fighting_you, auras=_copied_auras(mobile))
         for npc in getattr(knowledge, "npcs", {}).values():
-            self.remember_npc(
-                npc.name,
-                room_name=getattr(npc, "room_name", "") or "",
-                auras=_copied_auras(npc),
-            )
+            self.remember_npc(npc.name, room_name=getattr(npc, "room_name", "") or "", auras=_copied_auras(npc))
         room = getattr(knowledge, "room", None)
         if room is not None and str(getattr(room, "name", "") or "").strip():
-            self.remember_room(
-                room.name,
-                description=str(getattr(room, "description", "") or ""),
-                exits=list(getattr(room, "exits", []) or []),
-            )
+            self.remember_room(room.name, description=str(getattr(room, "description", "") or ""), exits=list(getattr(room, "exits", []) or []))
 
-    def _remember_subject(self, reading: ConsiderReading, *, agentic: bool) -> None:
+    def _remember_subject(self, reading: ConsiderOpponent, *, agentic: bool) -> None:
         if reading.kind == "agentic":
             self.remember_player(reading.subject, agentic=True)
         elif reading.kind == "player":
@@ -283,29 +295,37 @@ class WorkingMemory:
         return being
 
 
+def default_collection_path() -> Path:
+    return Path(__file__).resolve().parents[2] / "resources" / "collections" / _COLLECTION_FILE
+
+
+def _upsert_agent(documents: list, document: dict) -> list:
+    key = document["agentName"].strip().lower()
+    updated = []
+    replaced = False
+    for existing in documents:
+        if isinstance(existing, dict) and str(existing.get("agentName", "")).strip().lower() == key:
+            if not replaced:
+                updated.append(document)
+                replaced = True
+            continue
+        updated.append(existing)
+    if not replaced:
+        updated.append(document)
+    return updated
+
+
 def _copied_auras(record) -> list[str]:
     return [str(aura) for aura in (getattr(record, "auras", None) or [])]
 
 
-def _being_review(being: SessionBeing) -> dict:
-    return asdict(being)
-
-
-def _room_review(room: SessionRoom) -> dict:
-    return asdict(room)
-
-
-def _command_review(command: SessionCommand) -> dict:
-    return asdict(command)
-
-
-def _consider_review(reading: ConsiderReading) -> dict:
-    return asdict(reading)
+def _conversation_key(conversation: Conversation) -> tuple[str, str, str]:
+    return conversation.topic.lower(), conversation.location, conversation.location_name.lower()
 
 
 def _by_name(beings: list[SessionBeing]) -> list[SessionBeing]:
     return sorted(beings, key=lambda being: being.name.lower())
 
 
-def _by_target(readings: list[ConsiderReading]) -> list[ConsiderReading]:
+def _by_target(readings: list[ConsiderOpponent]) -> list[ConsiderOpponent]:
     return sorted(readings, key=lambda reading: reading.target.lower())

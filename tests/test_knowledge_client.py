@@ -27,11 +27,7 @@ class TestKnowledgeClient(unittest.TestCase):
             captured.update(method=method, url=url, json=json, headers=headers, timeout=timeout)
             return _Response(payload=json, content=b"{}")
 
-        client = KnowledgeClient(
-            "http://localhost:8169/",
-            headers_provider=lambda: {"Authorization": "Bearer jwt-token"},
-            request=request,
-        )
+        client = KnowledgeClient("http://localhost:8169/", headers_provider=lambda: {"Authorization": "Bearer jwt-token"}, request=request)
         saved = client.save("char 1", {"characterName": "Example", "helpTopics": []})
 
         self.assertEqual(captured["method"], "PUT")
@@ -62,16 +58,7 @@ class TestKnowledgeClient(unittest.TestCase):
         knowledge.login_lines = ["Welcome to the server!"]
         knowledge.remember_help(HelpTopic(command="look", keyword="LOOK", text="Look around.", raw="LOOK\nLook around."))
         knowledge.remember_area(AreaRecord(name="Temple of Mota", author="Romy", level_range="1-5"))
-        knowledge.remember_player(PlayerRecord(
-            name="Example",
-            level=1,
-            race="human",
-            character_class="Mag",
-            title="the agent",
-            agentic=True,
-            self_character=True,
-            room_name="Temple of Mota",
-        ))
+        knowledge.remember_player(PlayerRecord(name="Example", level=1, race="human", character_class="Mag", title="the agent", agentic=True, self_character=True, room_name="Temple of Mota"))
         knowledge.room = RoomSnapshot(name="Temple of Mota", description="A quiet temple.", exits=["north"], item_lines=["a fountain"])
         document = knowledge.to_document(character_id="char-1", character_name="Example", agent_name="example-agent")
 

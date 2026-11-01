@@ -4,7 +4,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Dict, Mapping, Sequence
 
-from util.GenericUtil import GenericUtil
+from util.SharedUtil import SharedUtil
 
 
 @dataclass(frozen=True)
@@ -72,7 +72,7 @@ class Prompt:
         if not isinstance(data, dict):
             raise TypeError("Prompt document must be an object")
 
-        normalized = GenericUtil.camel_to_snake_case(data)
+        normalized = SharedUtil.camel_to_snake_case(data)
         name = str(normalized.get("name", "")).strip()
         model = str(normalized.get("model", "")).strip()
         system = normalized.get("system", "")
@@ -93,14 +93,7 @@ class Prompt:
             text = spec.get("text", "")
             if not isinstance(text, str) or not text.strip():
                 raise ValueError(f"Prompt '{name}' token '{token_name}' requires text")
-        return cls(
-            name=name,
-            model=model,
-            system=system,
-            user=user,
-            json_schema=json_schema,
-            tokens=tokens,
-        )
+        return cls(name=name, model=model, system=system, user=user, json_schema=json_schema, tokens=tokens)
 
     def tokenize(self, score: str | Sequence[str], *intents: str) -> PromptSubmission:
         """Fill intent, response, and score tokens for one model submission."""
@@ -127,28 +120,15 @@ class Prompt:
             phrases.append(str(spec["text"]).strip())
             for key, value in _example_fields(name, spec["example"]).items():
                 if key not in self.json_schema.get("properties", {}):
-                    raise ValueError(
-                        f"Prompt '{self.name}' token '{name}' uses '{key}', which is not in jsonSchema."
-                    )
+                    raise ValueError(f"Prompt '{self.name}' token '{name}' uses '{key}', which is not in jsonSchema.")
                 response[key] = value
 
         properties = self.json_schema.get("properties", {})
-        schema = {
-            "type": "object",
-            "properties": {key: deepcopy(properties[key]) for key in response},
-            "required": list(response),
-        }
+        schema = {"type": "object", "properties": {key: deepcopy(properties[key]) for key in response}, "required": list(response)}
         response_json = json.dumps(response, indent=2, ensure_ascii=False)
         system = self.system.replace("{response}", response_json, 1).replace("{intent}", ", ".join(phrases), 1)
         user = self.user.replace("{score}", _score_text(score), 1)
-        return PromptSubmission(
-            name=self.name,
-            model=self.model,
-            system=system,
-            user=user,
-            json_schema=schema,
-            intents=tuple(chosen),
-        )
+        return PromptSubmission(name=self.name, model=self.model, system=system, user=user, json_schema=schema, intents=tuple(chosen))
 
 
 def _example_fields(name: str, example: Any) -> Mapping[str, Any]:

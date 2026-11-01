@@ -38,11 +38,7 @@ class TestWorldReader(unittest.TestCase):
         self.assertEqual(areas[1].author, "Kahn")
 
     def test_who_marks_agentic_players_and_self(self):
-        lines = [
-            "[1    human    Mag] Example the new one",
-            "[10    elf    War] (Wizi) Marcus the wanderer",
-            "Players found: 2",
-        ]
+        lines = ["[1    human    Mag] Example the new one", "[10    elf    War] (Wizi) Marcus the wanderer", "Players found: 2"]
         players = parse_who(lines, {"example", "other"}, "Example")
         example = players[0]
         marcus = players[1]
@@ -56,20 +52,8 @@ class TestWorldReader(unittest.TestCase):
         self.assertFalse(marcus.self_character)
 
     def test_look_splits_mobiles_npcs_and_players(self):
-        players = [
-            PlayerRecord(name="Example", level=1, race="human", character_class="Mag", agentic=True, self_character=True)
-        ]
-        lines = [
-            "Temple of Mota",
-            "\t\tA quiet stone temple.",
-            "    a fountain bubbles quietly.",
-            "Obvious exits:",
-            "north  Temple Square",
-            "east   Market",
-            "A goblin warrior is here.",
-            "Marcus is sitting here.",
-            "Example is here, fighting a goblin warrior.",
-        ]
+        players = [PlayerRecord(name="Example", level=1, race="human", character_class="Mag", agentic=True, self_character=True)]
+        lines = ["Temple of Mota", "\t\tA quiet stone temple.", "    a fountain bubbles quietly.", "Obvious exits:", "north  Temple Square", "east   Market", "A goblin warrior is here.", "Marcus is sitting here.", "Example is here, fighting a goblin warrior."]
         observation = parse_room(lines, players)
         self.assertEqual(observation.room.name, "Temple of Mota")
         self.assertEqual(observation.room.description, "A quiet stone temple.")
@@ -82,20 +66,8 @@ class TestWorldReader(unittest.TestCase):
         self.assertEqual(observation.players_present[0].name, "Example")
 
     def test_look_reads_an_aura_long_description_and_exit_labels(self):
-        players = [
-            PlayerRecord(name="Fizban", level=60, race="Human", character_class="IMP")
-        ]
-        lines = [
-            "By the Temple Altar",
-            "\t\tYou are by the temple altar.",
-            "    A pit for sacrifices is in front of the altar.",
-            "Fizban is here.",
-            "(White Aura) A healer is here, selling spells.",
-            "Hassan is here, waiting to dispense some justice.",
-            "Obvious exits:",
-            "South - The Temple Of Mota",
-            "Up    - Head of the Rainbow Bridge",
-        ]
+        players = [PlayerRecord(name="Fizban", level=60, race="Human", character_class="IMP")]
+        lines = ["By the Temple Altar", "\t\tYou are by the temple altar.", "    A pit for sacrifices is in front of the altar.", "Fizban is here.", "(White Aura) A healer is here, selling spells.", "Hassan is here, waiting to dispense some justice.", "Obvious exits:", "South - The Temple Of Mota", "Up    - Head of the Rainbow Bridge"]
         observation = parse_room(lines, players)
         self.assertEqual(observation.room.name, "By the Temple Altar")
         self.assertEqual(observation.room.description, "You are by the temple altar.")
@@ -115,15 +87,8 @@ class TestWorldReader(unittest.TestCase):
         self.assertEqual(players[0].auras, [])
 
     def test_look_keeps_aura_lists_for_mobiles_npcs_and_players(self):
-        players = [
-            PlayerRecord(name="Fizban", level=60, race="Human", character_class="IMP")
-        ]
-        lines = [
-            "By the Temple Altar",
-            "(Red Aura) (White Aura) A healer is here, selling spells.",
-            "(Invis) (Golden Aura) Hassan is here, waiting to dispense some justice.",
-            "(Wizi) (Pink Aura) Fizban is resting here.",
-        ]
+        players = [PlayerRecord(name="Fizban", level=60, race="Human", character_class="IMP")]
+        lines = ["By the Temple Altar", "(Red Aura) (White Aura) A healer is here, selling spells.", "(Invis) (Golden Aura) Hassan is here, waiting to dispense some justice.", "(Wizi) (Pink Aura) Fizban is resting here."]
         observation = parse_room(lines, players)
         self.assertEqual(observation.mobiles[0].name, "A healer")
         self.assertEqual(observation.mobiles[0].auras, ["Red Aura", "White Aura"])

@@ -21,14 +21,7 @@ class _Client:
 
 
 def _prompt() -> Prompt:
-    return Prompt(
-        name="command-category",
-        model="gpt-oss:20b",
-        system="Categorize the command.",
-        user="Command: {command}\n{help}",
-        json_schema={"type": "object", "properties": {"category": {"type": "string"}}},
-        tokens={},
-    )
+    return Prompt(name="command-category", model="gpt-oss:20b", system="Categorize the command.", user="Command: {command}\n{help}", json_schema={"type": "object", "properties": {"category": {"type": "string"}}}, tokens={})
 
 
 class TestCommandCategorizer(unittest.TestCase):

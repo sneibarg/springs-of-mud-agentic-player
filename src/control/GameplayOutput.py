@@ -8,15 +8,7 @@ from typing import Callable, Optional
 logger = logging.getLogger(__name__)
 
 # Lines that carry the telnet logon payload, an Authorization header, or a bearer token.
-_AUTH_MARKERS = (
-    '"accountid"',
-    '"characterid"',
-    '"password"',
-    "authorization:",
-    "authorization ",
-    "bearer ",
-    "password=",
-)
+_AUTH_MARKERS = ('"accountid"', '"characterid"', '"password"', "authorization:", "authorization ", "bearer ", "password=")
 
 
 class GameplayOutput:
@@ -28,13 +20,7 @@ class GameplayOutput:
 
     DEFAULT_SESSION_PATH = "session.txt"
 
-    def __init__(
-        self,
-        console: Optional[Callable[[str], None]] = None,
-        *,
-        enabled: bool = True,
-        default_session_path: str = DEFAULT_SESSION_PATH,
-    ):
+    def __init__(self, console: Optional[Callable[[str], None]] = None, *, enabled: bool = True, default_session_path: str = DEFAULT_SESSION_PATH):
         self._console = console or _default_console
         self._enabled = enabled
         self.default_session_path = default_session_path or self.DEFAULT_SESSION_PATH

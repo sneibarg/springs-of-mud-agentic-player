@@ -19,17 +19,7 @@ class AccountSession:
     name that was not in the login character list.
     """
 
-    def __init__(
-        self,
-        catalog: ConnectionCatalog,
-        *,
-        auth_base_url: str = "http://localhost:8169",
-        login_path: str = "/api/auth/login",
-        telnet_host: str = "localhost",
-        telnet_port: int = 6969,
-        auth_client_factory: Optional[Callable[[str], AuthClient]] = None,
-        session_factory: Optional[Callable[[str, int], PlayerSession]] = None,
-    ):
+    def __init__(self, catalog: ConnectionCatalog, *, auth_base_url: str = "http://localhost:8169", login_path: str = "/api/auth/login", telnet_host: str = "localhost", telnet_port: int = 6969, auth_client_factory: Optional[Callable[[str], AuthClient]] = None, session_factory: Optional[Callable[[str, int], PlayerSession]] = None):
         self.catalog = catalog
         self.auth_base_url = auth_base_url.rstrip("/")
         self.login_path = login_path

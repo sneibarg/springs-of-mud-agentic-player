@@ -28,14 +28,7 @@ class CommandCategorizer:
             raise ValueError(f"Prompt '{self.prompt.name}' is missing the {{command}} or {{help}} placeholder.")
         if not user.strip():
             raise ValueError("User prompt cannot be null or empty")
-        return PromptSubmission(
-            name=self.prompt.name,
-            model=self.prompt.model,
-            system=system,
-            user=user,
-            json_schema=dict(self.prompt.json_schema),
-            intents=(),
-        )
+        return PromptSubmission(name=self.prompt.name, model=self.prompt.model, system=system, user=user, json_schema=dict(self.prompt.json_schema), intents=())
 
     def categorize(self, memory: WorkingMemory, command: str, help_text: str) -> str:
         """Send the prompt and store the category on the remembered command."""

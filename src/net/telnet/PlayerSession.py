@@ -7,11 +7,7 @@ from net.telnet.TelnetClient import TelnetClient, TelnetConfig
 def build_logon_line(auth: AuthResponse, character_name: str) -> str:
     """Build the telnet line springs-of-mud-server MessageCodec accepts as AUTH."""
     character = auth.character_named(character_name)
-    payload = {
-        "accountId": auth.id,
-        "characterId": character.id,
-        "characterName": character.name,
-    }
+    payload = {"accountId": auth.id, "characterId": character.id, "characterName": character.name}
     return "logon " + json.dumps(payload, separators=(",", ":"))
 
 

@@ -1,14 +1,6 @@
 import socket
 
-from cli.ControlProtocol import (
-    DEFAULT_HOST,
-    DEFAULT_PORT,
-    UNKNOWN_COMMAND,
-    accepted_command,
-    encode_request,
-    read_reply,
-    require_loopback,
-)
+from cli.ControlProtocol import (DEFAULT_HOST, DEFAULT_PORT, UNKNOWN_COMMAND, accepted_command, encode_request, read_reply, require_loopback)
 
 
 class UnknownCommand(ValueError):

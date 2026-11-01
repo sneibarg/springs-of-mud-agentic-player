@@ -32,13 +32,7 @@ class TelnetConfig:
 class TelnetClient:
     """Threaded telnet client. Negotiation defaults match springs-of-mud-ui."""
 
-    def __init__(
-        self,
-        cfg: TelnetConfig,
-        *,
-        on_status: Optional[Callable[[str], None]] = None,
-        on_line: Optional[Callable[[str], None]] = None,
-    ):
+    def __init__(self, cfg: TelnetConfig, *, on_status: Optional[Callable[[str], None]] = None, on_line: Optional[Callable[[str], None]] = None):
         self.cfg = cfg
         self._on_status = on_status
         self._on_line = on_line

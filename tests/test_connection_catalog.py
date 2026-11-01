@@ -42,14 +42,7 @@ class TestConnectionCatalog(unittest.TestCase):
     def test_missing_connection_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "connections.json"
-            path.write_text(json.dumps([
-                {
-                    "name": "Local",
-                    "server_url": "http://localhost:8169",
-                    "account_name": "ada",
-                    "password": obfuscate_password("secret"),
-                }
-            ]), encoding="utf-8")
+            path.write_text(json.dumps([{"name": "Local", "server_url": "http://localhost:8169", "account_name": "ada", "password": obfuscate_password("secret")}]), encoding="utf-8")
             catalog = ConnectionCatalog.load(path)
             with self.assertRaises(LookupError):
                 catalog.named("missing")

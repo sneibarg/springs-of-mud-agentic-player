@@ -13,18 +13,7 @@ from prompt.PromptCollection import PromptCollection
 ROOT = Path(__file__).resolve().parents[1]
 PROMPTS = ROOT / "resources" / "collections" / "SOMDB.Prompts.json"
 
-SCORE = "\n".join(
-    [
-        "You are Example the new one, level 12, 17 years old (3 hours).",
-        "You have scored 1200 exp, and have 10 gold and 40 silver coins.",
-        "You need 50 exp to level.",
-        "You are armored against piercing.",
-        "You are armored against bashing.",
-        "You are armored against slashing.",
-        "You are armored against magic.",
-        "<20hp 100m 100mv>",
-    ]
-)
+SCORE = "\n".join(["You are Example the new one, level 12, 17 years old (3 hours).", "You have scored 1200 exp, and have 10 gold and 40 silver coins.", "You need 50 exp to level.", "You are armored against piercing.", "You are armored against bashing.", "You are armored against slashing.", "You are armored against magic.", "<20hp 100m 100mv>"])
 
 
 class TestPromptTokenizer(unittest.TestCase):
@@ -65,29 +54,14 @@ class TestPromptTokenizer(unittest.TestCase):
         submission = self.score.tokenize(["You are armored against piercing."], "armorClass")
 
         self.assertEqual(submission.user, "You are armored against piercing.")
-        self.assertEqual(
-            submission.json_schema["required"],
-            [
-                "armorPierce",
-                "armorBash",
-                "armorSlash",
-                "armorMagic",
-                "acPierce",
-                "acBash",
-                "acSlash",
-                "acMagic",
-            ],
-        )
+        self.assertEqual(submission.json_schema["required"], ["armorPierce", "armorBash", "armorSlash", "armorMagic", "acPierce", "acBash", "acSlash", "acMagic"])
         self.assertNotIn("expToLevel", submission.json_schema["properties"])
 
     def test_several_intents_keep_selection_order(self):
         submission = self.score.tokenize(SCORE, "expToLevel", "armorClass")
 
         self.assertEqual(submission.intents, ("expToLevel", "armorClass"))
-        self.assertIn(
-            "Request: the experience needed to level, armor class",
-            submission.system,
-        )
+        self.assertIn("Request: the experience needed to level, armor class", submission.system)
         self.assertEqual(submission.json_schema["required"][0], "expToLevel")
         self.assertIn("acPierce", submission.json_schema["required"])
 
@@ -133,14 +107,7 @@ class TestPromptTokenizer(unittest.TestCase):
             exits.tokenize("north", "expToLevel")
 
     def test_inline_prompt_rejects_a_key_outside_the_schema(self):
-        prompt = Prompt(
-            name="score",
-            model="gpt-oss:20b",
-            system="Request: {intent}\n{response}",
-            user="{score}",
-            json_schema={"type": "object", "properties": {"expToLevel": {"type": "integer"}}},
-            tokens={"expToLevel": {"text": "the experience needed to level", "example": {"missing": 1}}},
-        )
+        prompt = Prompt(name="score", model="gpt-oss:20b", system="Request: {intent}\n{response}", user="{score}", json_schema={"type": "object", "properties": {"expToLevel": {"type": "integer"}}}, tokens={"expToLevel": {"text": "the experience needed to level", "example": {"missing": 1}}})
         with self.assertRaises(ValueError):
             prompt.tokenize("You need 1 exp to level.", "expToLevel")
 

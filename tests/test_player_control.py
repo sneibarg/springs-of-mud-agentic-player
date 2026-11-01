@@ -62,16 +62,7 @@ class TestPlayerControl(unittest.TestCase):
             lines.put("   ")
             lines.put("dance")
             self.assertTrue(_wait_for(lambda: replies.count(PlayerControl.UNKNOWN_REPLY) == 2))
-            self.assertEqual(
-                replies,
-                [
-                    PlayerControl.GREETING,
-                    PlayerControl.PLAY_REPLY,
-                    PlayerControl.IDLE_REPLY,
-                    PlayerControl.UNKNOWN_REPLY,
-                    PlayerControl.UNKNOWN_REPLY,
-                ],
-            )
+            self.assertEqual(replies, [PlayerControl.GREETING, PlayerControl.PLAY_REPLY, PlayerControl.IDLE_REPLY, PlayerControl.UNKNOWN_REPLY, PlayerControl.UNKNOWN_REPLY])
             self.assertEqual(control.mode, PlayerControl.IDLE)
         finally:
             self._finish(control, lines)
@@ -90,10 +81,7 @@ class TestPlayerControl(unittest.TestCase):
             self.assertTrue(release.wait(2))
 
         control.start()
-        driver = threading.Thread(
-            target=lambda: control.drive(on_play, wait_s=0.05),
-            name="session",
-        )
+        driver = threading.Thread(target=lambda: control.drive(on_play, wait_s=0.05), name="session")
         driver.start()
         try:
             lines.put("play")
@@ -119,12 +107,7 @@ class TestPlayerControl(unittest.TestCase):
         memory.remember_mobile("a goblin", aggressive=True)
         with tempfile.TemporaryDirectory() as directory:
             path = os.path.join(directory, "review.json")
-            control = PlayerControl(
-                reader=lambda: _next_line(lines),
-                writer=replies.append,
-                memory=memory,
-                memory_path=path,
-            )
+            control = PlayerControl(reader=lambda: _next_line(lines), writer=replies.append, memory=memory, memory_path=path)
             control.start()
             try:
                 lines.put("memory")
@@ -148,11 +131,7 @@ class TestPlayerControl(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = os.path.join(directory, "session.txt")
             output = GameplayOutput(console=shown.append, default_session_path=path)
-            control = PlayerControl(
-                reader=lambda: _next_line(lines),
-                writer=replies.append,
-                output=output,
-            )
+            control = PlayerControl(reader=lambda: _next_line(lines), writer=replies.append, output=output)
             control.start()
             try:
                 self.assertEqual(control.mode, PlayerControl.IDLE)
@@ -207,11 +186,7 @@ class TestPlayerControl(unittest.TestCase):
                 return "Logged on as Example."
 
         account = _Account()
-        control = PlayerControl(
-            reader=lambda: _next_line(lines),
-            writer=replies.append,
-            account=account,
-        )
+        control = PlayerControl(reader=lambda: _next_line(lines), writer=replies.append, account=account)
         control.start()
         try:
             lines.put("play")

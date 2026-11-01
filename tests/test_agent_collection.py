@@ -46,12 +46,7 @@ class TestAgentCollection(unittest.TestCase):
         self.assertEqual(config.control_port, 9711)
 
     def test_duplicate_name_is_rejected(self):
-        document = {
-            "_id": {"$oid": "66f0a1b2c3d4e5f607182931"},
-            "name": "Guide",
-            "accountName": "account",
-            "characterName": "Guide",
-        }
+        document = {"_id": {"$oid": "66f0a1b2c3d4e5f607182931"}, "name": "Guide", "accountName": "account", "characterName": "Guide"}
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "SOMDB.Agents.json"
             path.write_text(json.dumps([document, dict(document, name="guide")]), encoding="utf-8")
@@ -60,13 +55,7 @@ class TestAgentCollection(unittest.TestCase):
                 AgentRegistry(collection.agents)
 
     def test_disabled_agent_is_not_required(self):
-        document = {
-            "_id": "abc",
-            "name": "sleeper",
-            "accountName": "account",
-            "characterName": "Sleeper",
-            "enabled": False,
-        }
+        document = {"_id": "abc", "name": "sleeper", "accountName": "account", "characterName": "Sleeper", "enabled": False}
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "SOMDB.Agents.json"
             path.write_text(json.dumps([document]), encoding="utf-8")

@@ -18,14 +18,7 @@ class KnowledgeClient:
       `characterId` in the body matches the path. A PUT replaces the whole snapshot.
     """
 
-    def __init__(
-        self,
-        base_url: str,
-        path: str = "/api/v1/agent-knowledge",
-        headers_provider: Optional[Callable[[], dict]] = None,
-        request: Optional[Callable] = None,
-        timeout_s: float = 10.0,
-    ):
+    def __init__(self, base_url: str, path: str = "/api/v1/agent-knowledge", headers_provider: Optional[Callable[[], dict]] = None, request: Optional[Callable] = None, timeout_s: float = 10.0):
         self.base_url = base_url.rstrip("/")
         self.path = path if path.startswith("/") else f"/{path}"
         self._headers_provider = headers_provider or (lambda: {})
@@ -58,13 +51,7 @@ class KnowledgeClient:
     def _call(self, method: str, character_id: str, body: Optional[dict]):
         url = self._url(character_id)
         try:
-            response = self._request(
-                method,
-                url,
-                json=body,
-                headers=dict(self._headers_provider() or {}),
-                timeout=self.timeout_s,
-            )
+            response = self._request(method, url, json=body, headers=dict(self._headers_provider() or {}), timeout=self.timeout_s)
         except KnowledgeStoreError:
             raise
         except Exception as exc:

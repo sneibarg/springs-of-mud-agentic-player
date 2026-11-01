@@ -8,11 +8,7 @@ class TestLiveLogon(unittest.TestCase):
         play = require_live_play(self)
         try:
             character = play.character
-            higher = [
-                other.name
-                for other in play.account.auth.player_character_list
-                if other.level is not None and other.level > character.level
-            ]
+            higher = [other.name for other in play.account.auth.player_character_list if other.level is not None and other.level > character.level]
             self.assertTrue(higher)
             score = play.exchange("score")
             sheet = "\n".join(score)

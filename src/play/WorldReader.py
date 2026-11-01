@@ -7,25 +7,9 @@ from play.WorldKnowledge import AreaRecord, BeingRecord, PlayerRecord, RoomSnaps
 
 
 _AREA_COLUMNS = 39
-_AREA = re.compile(
-    r"^(?:\[(?P<levels>[^\]]+)\]\s*)?(?:(?P<author>[^:\[]+):\s*)?(?P<name>\S.*?)\s*$"
-)
-_WHO = re.compile(
-    r"^\[(?P<level>\d+)\s+(?P<race>\S+)\s+(?P<class_name>\S+)\]"
-    r"(?P<flags>(?:\s+\([^)]+\))*)\s+"
-    r"(?P<name>\S+)\s*(?P<title>.*)$"
-)
-_POSES = (
-    (" is DEAD!!", "dead"),
-    (" is mortally wounded.", "mortally wounded"),
-    (" is incapacitated.", "incapacitated"),
-    (" is lying here stunned.", "stunned"),
-    (" is sleeping here.", "sleeping"),
-    (" is resting here.", "resting"),
-    (" is sitting here.", "sitting"),
-    (" is here, fighting ", "fighting"),
-    (" is here.", "here"),
-)
+_AREA = re.compile(r"^(?:\[(?P<levels>[^\]]+)\]\s*)?(?:(?P<author>[^:\[]+):\s*)?(?P<name>\S.*?)\s*$")
+_WHO = re.compile(r"^\[(?P<level>\d+)\s+(?P<race>\S+)\s+(?P<class_name>\S+)\]" r"(?P<flags>(?:\s+\([^)]+\))*)\s+" r"(?P<name>\S+)\s*(?P<title>.*)$")
+_POSES = ((" is DEAD!!", "dead"), (" is mortally wounded.", "mortally wounded"), (" is incapacitated.", "incapacitated"), (" is lying here stunned.", "stunned"), (" is sleeping here.", "sleeping"), (" is resting here.", "resting"), (" is sitting here.", "sitting"), (" is here, fighting ", "fighting"), (" is here.", "here"))
 _DIRECTIONS = {"north", "east", "south", "west", "up", "down"}
 _ARTICLES = {"a", "an", "the", "some"}
 _LOOK_PREFIX = re.compile(r"^\((?P<label>[^)\n]+)\)\s*")
@@ -50,18 +34,16 @@ class RoomObservation:
 class WorldReader:
     """Turn areas, who, and look output into knowledge records."""
 
-    def read_areas(self, channel: CommandChannel) -> list[AreaRecord]:
+    @staticmethod
+    def read_areas(channel: CommandChannel) -> list[AreaRecord]:
         return parse_areas(channel.exchange("areas"))
 
-    def read_players(
-        self,
-        channel: CommandChannel,
-        agent_character_names: set[str],
-        self_character: str,
-    ) -> list[PlayerRecord]:
+    @staticmethod
+    def read_players(channel: CommandChannel, agent_character_names: set[str], self_character: str) -> list[PlayerRecord]:
         return parse_who(channel.exchange("who"), agent_character_names, self_character)
 
-    def read_room(self, lines: list[str], players: list[PlayerRecord]) -> RoomObservation:
+    @staticmethod
+    def read_room(lines: list[str], players: list[PlayerRecord]) -> RoomObservation:
         return parse_room(lines, players)
 
 
@@ -95,18 +77,7 @@ def parse_who(lines: list[str], agent_character_names: set[str], self_character:
         if match is None:
             continue
         name = match.group("name")
-        players.append(
-            PlayerRecord(
-                name=name,
-                level=int(match.group("level")),
-                race=match.group("race"),
-                character_class=match.group("class_name"),
-                title=match.group("title").strip(),
-                flags=match.group("flags").strip(),
-                agentic=name.lower() in agent_names,
-                self_character=name.lower() == self_name,
-            )
-        )
+        players.append(PlayerRecord(name=name, level=int(match.group("level")), race=match.group("race"), character_class=match.group("class_name"), title=match.group("title").strip(), flags=match.group("flags").strip(), agentic=name.lower() in agent_names, self_character=name.lower() == self_name))
     return players
 
 
@@ -140,12 +111,7 @@ def parse_room(lines: list[str], players: list[PlayerRecord]) -> RoomObservation
         if stripped:
             prose.append(stripped)
 
-    room = RoomSnapshot(
-        name=prose[0] if prose else "",
-        description="\n".join(prose[1:]) if len(prose) > 1 else "",
-        exits=exits,
-        item_lines=items,
-    )
+    room = RoomSnapshot(name=prose[0] if prose else "", description="\n".join(prose[1:]) if len(prose) > 1 else "", exits=exits, item_lines=items)
     observation = RoomObservation(room=room)
     for presence in presences:
         player = _match_player(presence.name, players)
@@ -153,14 +119,7 @@ def parse_room(lines: list[str], players: list[PlayerRecord]) -> RoomObservation
             player.auras = list(presence.auras)
             observation.players_present.append(player)
             continue
-        being = BeingRecord(
-            name=presence.name,
-            kind=_being_kind(presence.name),
-            pose=presence.pose,
-            room_name=room.name,
-            detail=presence.detail,
-            auras=list(presence.auras),
-        )
+        being = BeingRecord(name=presence.name, kind=_being_kind(presence.name), pose=presence.pose, room_name=room.name, detail=presence.detail, auras=list(presence.auras))
         if being.kind == "npc":
             observation.npcs.append(being)
         else:

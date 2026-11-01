@@ -1,15 +1,7 @@
 import socket
 import threading
 
-from cli.ControlProtocol import (
-    DEFAULT_HOST,
-    DEFAULT_PORT,
-    UNKNOWN_COMMAND,
-    accepted_command,
-    encode_reply,
-    read_request,
-    require_loopback,
-)
+from cli.ControlProtocol import (DEFAULT_HOST, DEFAULT_PORT, UNKNOWN_COMMAND, accepted_command, encode_reply, read_request, require_loopback)
 
 
 class ControlServer:

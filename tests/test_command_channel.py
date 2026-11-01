@@ -40,14 +40,7 @@ class _QueueClient:
 class TestCommandChannel(unittest.TestCase):
     def _channel(self, client: _QueueClient, replace_existing: str = "Y") -> CommandChannel:
         clock = _Clock()
-        return CommandChannel(
-            client,
-            timeout_s=0.3,
-            poll_interval_s=0.1,
-            replace_existing=replace_existing,
-            clock=clock,
-            sleep=clock.sleep,
-        )
+        return CommandChannel(client, timeout_s=0.3, poll_interval_s=0.1, replace_existing=replace_existing, clock=clock, sleep=clock.sleep)
 
     def test_pager_is_acknowledged_and_omitted_from_the_page(self):
         client = _QueueClient()
@@ -63,10 +56,7 @@ class TestCommandChannel(unittest.TestCase):
 
     def test_existing_session_is_replaced_with_y(self):
         client = _QueueClient()
-        client.pending = [
-            "That character is already playing.",
-            "Do you wish to connect anyway (Y/N)?",
-        ]
+        client.pending = ["That character is already playing.", "Do you wish to connect anyway (Y/N)?"]
         client.on_send["Y"] = ["Welcome to the server!", "<10hp 10m 10mv>"]
         channel = self._channel(client)
 

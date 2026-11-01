@@ -13,13 +13,7 @@ class OllamaClient:
     200 returns {"text": "..."}. 400 and 502 return {"error": "..."}.
     """
 
-    def __init__(
-        self,
-        base_url: str = "http://localhost:9081",
-        path: str = "/ollama/completions",
-        request: Optional[Callable] = None,
-        timeout_s: float = 120.0,
-    ):
+    def __init__(self, base_url: str = "http://localhost:9081", path: str = "/ollama/completions", request: Optional[Callable] = None, timeout_s: float = 120.0):
         self.base_url = base_url.rstrip("/")
         self.path = path if path.startswith("/") else f"/{path}"
         self._request = request or _default_request
@@ -31,13 +25,7 @@ class OllamaClient:
             raise OllamaError("User prompt cannot be null or empty")
         url = f"{self.base_url}{self.path}"
         try:
-            response = self._request(
-                "POST",
-                url,
-                json=body,
-                headers={"Content-Type": "application/json"},
-                timeout=self.timeout_s,
-            )
+            response = self._request("POST", url, json=body, headers={"Content-Type": "application/json"}, timeout=self.timeout_s)
         except OllamaError:
             raise
         except Exception as exc:

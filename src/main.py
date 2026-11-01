@@ -44,28 +44,14 @@ def run_agent(agent_name: str, config: AgentConfig) -> int:
     agent = registry.require(agent_name)
     catalog = ConnectionCatalog.load(config.connections_path)
     output = GameplayOutput()
-    account = AccountSession(
-        catalog,
-        auth_base_url=config.auth_base_url,
-        login_path=config.login_path,
-        telnet_host=config.telnet_host,
-        telnet_port=config.telnet_port,
-        auth_client_factory=lambda base_url: AuthClient(base_url, login_path=config.login_path),
-        session_factory=lambda host, port: PlayerSession(
-            TelnetConfig(host=host, port=port),
-            on_line=output.write,
-        ),
-    )
+    account = AccountSession(catalog, auth_base_url=config.auth_base_url, login_path=config.login_path, telnet_host=config.telnet_host, telnet_port=config.telnet_port, auth_client_factory=lambda base_url: AuthClient(base_url, login_path=config.login_path), session_factory=lambda host, port: PlayerSession(TelnetConfig(host=host, port=port), on_line=output.write))
     memory = WorkingMemory()
     control = PlayerControl(memory=memory, output=output, account=account)
     server = ControlServer(control, host=config.control_host, port=config.control_port)
     try:
         server.start()
         print(f"Control listening on {server.host}:{server.bound_port}", flush=True)
-        control.drive(
-            lambda: _begin_play(account, registry, agent, config, memory),
-            connected=lambda: account.session is None or account.session.client.connected,
-        )
+        control.drive(lambda: _begin_play(account, registry, agent, config, memory), connected=lambda: account.session is None or account.session.client.connected)
     except PlayError as exc:
         print(str(exc), file=sys.stderr)
         return 1
@@ -84,38 +70,17 @@ def _begin_play(account: AccountSession, registry, agent, config, memory) -> Non
         print("Log on with an available character before play.", file=sys.stderr)
         return
     character = account.character
-    knowledge = Bootstrapper(
-        account.session,
-        [item.character_name for item in registry.all()],
-        character.name,
-        memory=memory,
-        replace_existing=config.telnet_replace_existing,
-    ).bootstrap()
+    knowledge = Bootstrapper(account.session, [item.character_name for item in registry.all()], character.name, memory=memory, replace_existing=config.telnet_replace_existing).bootstrap()
     memory.absorb_world(knowledge)
-    _save_knowledge(config, account.auth_client, character.id, knowledge.to_document(
-        character_id=character.id,
-        character_name=character.name,
-        agent_name=agent.name,
-    ))
+    _save_knowledge(config, account.auth_client, character.id, knowledge.to_document(character_id=character.id, character_name=character.name, agent_name=agent.name))
     room_name = knowledge.room.name if knowledge.room is not None else ""
-    print(
-        "Knowledge: "
-        f"{len(knowledge.help_topics)} help, "
-        f"{len(knowledge.areas)} areas, "
-        f"{len(knowledge.mobiles)} mobiles, "
-        f"{len(knowledge.npcs)} npcs, "
-        f"{len(knowledge.players)} players."
-    )
+    print("Knowledge: " f"{len(knowledge.help_topics)} help, " f"{len(knowledge.areas)} areas, " f"{len(knowledge.mobiles)} mobiles, " f"{len(knowledge.npcs)} npcs, " f"{len(knowledge.players)} players.")
     if room_name:
         print(f"Current room: {room_name}")
 
 
 def _save_knowledge(config: AgentConfig, auth_client: AuthClient, character_id: str, document: dict) -> None:
-    client = KnowledgeClient(
-        config.knowledge_base_url,
-        path=config.knowledge_path,
-        headers_provider=auth_client.get_auth_headers,
-    )
+    client = KnowledgeClient(config.knowledge_base_url, path=config.knowledge_path, headers_provider=auth_client.get_auth_headers)
     try:
         client.save(character_id, document)
     except (KnowledgeStoreError, ValueError) as exc:

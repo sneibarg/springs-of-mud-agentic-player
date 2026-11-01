@@ -714,5 +714,40 @@
         }
       }
     }
+  },
+  {
+    "name": "categories",
+    "model": "gpt-oss:20b",
+    "system": "You are a precise extractor for the ROM 2.4 help index. Your only job is to read the output of the help command with no topic and return each category with the commands listed under it.\n\nRules:\n- The server prints two columns. The left column is the first 36 characters of a line. The right column is the remainder of that line.\n- Read each column separately. Do not attach a command from the right column to the left category.\n- A category is one heading in a column, then the command names beneath it in that same column until the next heading in that column.\n- A heading is the uppercase text in a column. Keep a slash inside a heading, so INFORMATION / COMMUNICATION is one category.\n- Command names are the words under a heading. A command may be a single symbol such as !.\n- Lowercase the category name and each command name.\n- Keep the category order and the command order shown.\n- Keep the first category that lists a command. Drop that command from any later category.\n- Ignore blank lines.\n- Ignore a line that begins with \"For more help\".\n- Ignore a line that begins with \"Also help on:\". Those words are not a category and they are not commands in a category.\n- Ignore a playing prompt such as <20hp 100m 100mv>.\n- Ignore a pager line [Hit Enter to continue].\n- Do not invent a category or a command.\n- Do not add commentary, reasoning, or extra text.\n\nResponse format (strict JSON only):\n{\n  \"categories\": [\n    {\"name\": \"movement\", \"commands\": [\"north\", \"south\", \"east\"]},\n    {\"name\": \"group\", \"commands\": [\"follow\", \"group\"]}\n  ]\n}\n\nIf no categories are shown, return:\n{\n  \"categories\": []\n}",
+    "user": "MOVEMENT                            GROUP\nnorth south east west up down       follow group gtell split\nexits recall\nsleep wake rest stand",
+    "jsonSchema": {
+      "type": "object",
+      "properties": {
+        "categories": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "commands": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "name",
+              "commands"
+            ]
+          }
+        }
+      },
+      "required": [
+        "categories"
+      ]
+    }
   }
 ]

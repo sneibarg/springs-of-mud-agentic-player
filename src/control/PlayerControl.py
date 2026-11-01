@@ -37,15 +37,7 @@ class PlayerControl:
     PLAY_REPLY = "Play."
     UNKNOWN_REPLY = UNKNOWN_COMMAND
 
-    def __init__(
-        self,
-        reader: Optional[Callable[[], str]] = None,
-        writer: Optional[Callable[[str], None]] = None,
-        memory: Optional[WorkingMemory] = None,
-        memory_path: str = DEFAULT_MEMORY_PATH,
-        output: Optional[GameplayOutput] = None,
-        account: Optional[AccountSession] = None,
-    ):
+    def __init__(self, reader: Optional[Callable[[], str]] = None, writer: Optional[Callable[[str], None]] = None, memory: Optional[WorkingMemory] = None, memory_path: str = DEFAULT_MEMORY_PATH, output: Optional[GameplayOutput] = None, account: Optional[AccountSession] = None):
         self._reader = reader or _default_reader
         self._writer = writer or _default_writer
         self.memory = memory if memory is not None else WorkingMemory()
@@ -87,13 +79,7 @@ class PlayerControl:
         if self._thread is not None:
             self._thread.join(timeout)
 
-    def drive(
-        self,
-        on_play: Callable[[], None],
-        *,
-        connected: Callable[[], bool] = lambda: True,
-        wait_s: float = 0.2,
-    ) -> None:
+    def drive(self, on_play: Callable[[], None], *, connected: Callable[[], bool] = lambda: True, wait_s: float = 0.2) -> None:
         """Block until stop or disconnect. `on_play` runs on this thread, once."""
         played = False
         while True:

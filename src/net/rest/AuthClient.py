@@ -10,13 +10,7 @@ class AuthClient:
     The auth token is the Authorization response header from POST /api/auth/login.
     """
 
-    def __init__(
-        self,
-        base_url: str = "http://localhost:8169",
-        login_path: str = "/api/auth/login",
-        post: Optional[Callable] = None,
-        timeout_s: float = 10.0,
-    ):
+    def __init__(self, base_url: str = "http://localhost:8169", login_path: str = "/api/auth/login", post: Optional[Callable] = None, timeout_s: float = 10.0):
         self.base_url = base_url.rstrip("/")
         self.login_path = login_path if login_path.startswith("/") else f"/{login_path}"
         self.auth_endpoint = urljoin(f"{self.base_url}/", self.login_path.lstrip("/"))
@@ -26,11 +20,7 @@ class AuthClient:
         self.auth_data: Optional[AuthResponse] = None
 
     def login(self, account_name: str, password: str) -> AuthResponse:
-        response = self._post(
-            self.auth_endpoint,
-            json={"accountName": account_name, "password": password},
-            timeout=self.timeout_s,
-        )
+        response = self._post(self.auth_endpoint, json={"accountName": account_name, "password": password}, timeout=self.timeout_s)
         response.raise_for_status()
         self.auth_data = AuthResponse.from_json(response.json())
         self.jwt_token = _authorization_header(response.headers)

@@ -17,14 +17,7 @@ from tests.live_session import QUIT_PHRASE, LivePlay, require_live_play
 
 _ARTICLES = {"a", "an", "the", "some"}
 _OUTLOOKS = {"safe", "even", "risky", "fatal"}
-_REVERSE = {
-    "north": "south",
-    "south": "north",
-    "east": "west",
-    "west": "east",
-    "up": "down",
-    "down": "up",
-}
+_REVERSE = {"north": "south", "south": "north", "east": "west", "west": "east", "up": "down", "down": "up"}
 _CLOSED_DOOR = re.compile(r"^the .+ is closed\.$", re.IGNORECASE)
 _MOVE_LIMIT = 5
 _OUTPUT = Path(__file__).resolve().parent / "output"
@@ -77,11 +70,7 @@ class TestLiveWorkingMemory(unittest.TestCase):
                 self.assertEqual(remembered.auras, player.auras)
 
             keyword = _consider_keyword(mobile.name)
-            reading = memory.remember_consider(
-                keyword,
-                play.exchange(f"consider {keyword}"),
-                kind="mobile",
-            )
+            reading = memory.remember_consider(keyword, play.exchange(f"consider {keyword}"), kind="mobile")
             self.assertTrue(reading.estimated, reading.text)
             self.assertIn(reading.outlook, _OUTLOOKS)
             self.assertIs(memory.consider_for(keyword), reading)
@@ -96,9 +85,7 @@ class TestLiveWorkingMemory(unittest.TestCase):
             for player in observation.players_present:
                 if player.self_character:
                     continue
-                dumped_player = next(
-                    item for item in review["players"] + review["agentic_players"] if item["name"] == player.name
-                )
+                dumped_player = next(item for item in review["players"] + review["agentic_players"] if item["name"] == player.name)
                 self.assertEqual(dumped_player["auras"], player.auras)
 
             farewell = play.quit()
@@ -145,12 +132,7 @@ class TestLiveWorkingMemory(unittest.TestCase):
             for being in observation.npcs:
                 self.assertEqual(memory.being_named(being.name).auras, being.auras)
 
-            reading = memory.remember_consider(
-                other.name,
-                play.exchange(f"consider {other.name}"),
-                kind="player",
-                agentic=other.agentic,
-            )
+            reading = memory.remember_consider(other.name, play.exchange(f"consider {other.name}"), kind="player", agentic=other.agentic)
             self.assertEqual(reading.kind, "agentic" if other.agentic else "player")
             self.assertTrue(reading.estimated, reading.text)
             self.assertIn(reading.outlook, _OUTLOOKS)
@@ -245,10 +227,7 @@ def _agent_character_names() -> set[str]:
 
 def _other_players(observation, self_name: str) -> list:
     self_key = self_name.strip().lower()
-    return [
-        player for player in observation.players_present
-        if not player.self_character and player.name.strip().lower() != self_key
-    ]
+    return [player for player in observation.players_present if not player.self_character and player.name.strip().lower() != self_key]
 
 
 def _find_player(play: LivePlay, players: list):

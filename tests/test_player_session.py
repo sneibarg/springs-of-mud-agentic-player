@@ -21,13 +21,7 @@ class _FakeSocket:
 
 class TestPlayerSession(unittest.TestCase):
     def setUp(self):
-        self.auth = AuthResponse.from_json(
-            {
-                "id": "account-1",
-                "accountName": "ada",
-                "playerCharacterList": [{"id": "char-1", "name": "Example"}],
-            }
-        )
+        self.auth = AuthResponse.from_json({"id": "account-1", "accountName": "ada", "playerCharacterList": [{"id": "char-1", "name": "Example"}]})
 
     def test_logon_line_matches_server_auth_payload(self):
         line = build_logon_line(self.auth, "example")
@@ -35,10 +29,7 @@ class TestPlayerSession(unittest.TestCase):
         payload = json.loads(payload_json)
 
         self.assertEqual(verb, "logon")
-        self.assertEqual(
-            payload,
-            {"accountId": "account-1", "characterId": "char-1", "characterName": "Example"},
-        )
+        self.assertEqual(payload, {"accountId": "account-1", "characterId": "char-1", "characterName": "Example"})
 
     def test_session_sends_logon_with_crlf(self):
         client = TelnetClient(TelnetConfig(host="localhost", port=6969))

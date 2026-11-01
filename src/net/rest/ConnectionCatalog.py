@@ -73,14 +73,7 @@ def _connection(entry, index: int) -> SavedConnection:
     if not name:
         raise ValueError(f"Connection {index} requires a name")
     host = str(entry.get("telnet_host", "") or "").strip()
-    return SavedConnection(
-        name=name,
-        server_url=str(entry.get("server_url", "") or "").strip(),
-        account_name=str(entry.get("account_name", "") or "").strip(),
-        telnet_host=host or None,
-        telnet_port=_port(entry.get("telnet_port"), name),
-        obfuscated_password=str(entry.get("password", "") or ""),
-    )
+    return SavedConnection(name=name, server_url=str(entry.get("server_url", "") or "").strip(), account_name=str(entry.get("account_name", "") or "").strip(), telnet_host=host or None, telnet_port=_port(entry.get("telnet_port"), name), obfuscated_password=str(entry.get("password", "") or ""))
 
 
 def _port(value, name: str) -> Optional[int]:

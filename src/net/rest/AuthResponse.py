@@ -56,14 +56,7 @@ class AuthResponse:
         for entry in data.get("playerCharacterList", []) or []:
             characters.append(CharacterSummary.from_json(entry))
 
-        return cls(
-            id=account_id,
-            first_name=str(data.get("firstName", "") or ""),
-            last_name=str(data.get("lastName", "") or ""),
-            account_name=account_name,
-            email_address=str(data.get("emailAddress", "") or ""),
-            player_character_list=characters,
-        )
+        return cls(id=account_id, first_name=str(data.get("firstName", "") or ""), last_name=str(data.get("lastName", "") or ""), account_name=account_name, email_address=str(data.get("emailAddress", "") or ""), player_character_list=characters)
 
 
 def _character_level(data: Dict[str, Any]) -> Optional[int]:

@@ -30,21 +30,7 @@ class TestAuthClient(unittest.TestCase):
             captured["url"] = url
             captured["json"] = json
             captured["timeout"] = timeout
-            return _Response(
-                {
-                    "id": "account-1",
-                    "firstName": "Ada",
-                    "lastName": "Lovelace",
-                    "accountName": "ada",
-                    "emailAddress": "ada@example.com",
-                    "password": "secret",
-                    "playerCharacterList": [
-                        {"id": "char-1", "name": "Example"},
-                        {"id": "char-2", "name": "Other"},
-                    ],
-                },
-                {"Authorization": "jwt-token"},
-            )
+            return _Response({"id": "account-1", "firstName": "Ada", "lastName": "Lovelace", "accountName": "ada", "emailAddress": "ada@example.com", "password": "secret", "playerCharacterList": [{"id": "char-1", "name": "Example"}, {"id": "char-2", "name": "Other"}]}, {"Authorization": "jwt-token"})
 
         client = AuthClient("http://localhost:8169/", post=post)
         auth = client.login("ada", "secret")
@@ -60,17 +46,7 @@ class TestAuthClient(unittest.TestCase):
 
     def test_lowest_level_character_is_selected_from_the_login_list(self):
         def post(url, json, timeout):
-            return _Response(
-                {
-                    "id": "account-1",
-                    "accountName": "sneibarg",
-                    "playerCharacterList": [
-                        {"id": "char-1", "name": "Fizban", "level": 60},
-                        {"id": "char-2", "name": "Janky", "level": 8},
-                    ],
-                },
-                {},
-            )
+            return _Response({"id": "account-1", "accountName": "sneibarg", "playerCharacterList": [{"id": "char-1", "name": "Fizban", "level": 60}, {"id": "char-2", "name": "Janky", "level": 8}]}, {})
 
         auth = AuthClient(post=post).login("sneibarg", "secret")
         character = auth.lowest_level_character()
@@ -79,10 +55,7 @@ class TestAuthClient(unittest.TestCase):
 
     def test_bearer_prefix_is_not_doubled(self):
         def post(url, json, timeout):
-            return _Response(
-                {"id": "account-1", "accountName": "ada", "playerCharacterList": []},
-                {"Authorization": "Bearer already"},
-            )
+            return _Response({"id": "account-1", "accountName": "ada", "playerCharacterList": []}, {"Authorization": "Bearer already"})
 
         client = AuthClient(post=post)
         client.login("ada", "secret")

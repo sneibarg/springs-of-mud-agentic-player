@@ -1,3 +1,3 @@
-from .GenericUtil import GenericUtil
+from .SharedUtil import SharedUtil
 
-__all__ = ["GenericUtil"]
+__all__ = ["SharedUtil"]

@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Any, Dict
 
-from util.GenericUtil import GenericUtil
+from util.SharedUtil import SharedUtil
 
 
 def _read_id(data: Dict[str, Any]) -> str:
@@ -25,7 +25,7 @@ class Agent:
         if not isinstance(data, dict):
             raise TypeError("Agent document must be an object")
 
-        normalized = GenericUtil.camel_to_snake_case(data)
+        normalized = SharedUtil.camel_to_snake_case(data)
         name = str(normalized.get("name", "")).strip()
         account_name = str(normalized.get("account_name", "")).strip()
         character_name = str(normalized.get("character_name", "")).strip()
@@ -37,11 +37,4 @@ class Agent:
             raise ValueError(f"Agent '{name}' enabled must be a boolean")
 
         description = str(normalized.get("description", "") or "")
-        return cls(
-            id=_read_id(data),
-            name=name,
-            account_name=account_name,
-            character_name=character_name,
-            enabled=enabled,
-            description=description,
-        )
+        return cls(id=_read_id(data), name=name, account_name=account_name, character_name=character_name, enabled=enabled, description=description)

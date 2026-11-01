@@ -48,11 +48,7 @@ class TestOllamaClient(unittest.TestCase):
 
     def test_bad_request_uses_the_service_error(self):
         def request(method, url, json, headers, timeout):
-            return _Response(
-                status_code=400,
-                payload={"error": "User prompt cannot be null or empty", "user": "secret score"},
-                content=b"secret score",
-            )
+            return _Response(status_code=400, payload={"error": "User prompt cannot be null or empty", "user": "secret score"}, content=b"secret score")
 
         client = OllamaClient("http://localhost:9081", request=request)
         with self.assertRaises(OllamaError) as raised:

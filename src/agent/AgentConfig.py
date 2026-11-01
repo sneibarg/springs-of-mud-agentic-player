@@ -47,10 +47,7 @@ class AgentConfig:
         database = str(collection.get("database", AgentCollection.DATABASE))
         collection_name = str(collection.get("name", AgentCollection.NAME))
         if database != AgentCollection.DATABASE or collection_name != AgentCollection.NAME:
-            raise ValueError(
-                f"Expected {AgentCollection.DATABASE}.{AgentCollection.NAME}, "
-                f"got {database}.{collection_name}"
-            )
+            raise ValueError(f"Expected {AgentCollection.DATABASE}.{AgentCollection.NAME}, " f"got {database}.{collection_name}")
 
         collection_path = Path(str(collection.get("path", f"resources/collections/{AgentCollection.FILENAME}")))
         if not collection_path.is_absolute():
@@ -66,23 +63,7 @@ class AgentConfig:
         if not 1 <= control_port <= 65535:
             raise ValueError("control.port must be a TCP port")
 
-        return cls(
-            auth_base_url=auth_base_url,
-            login_path=str(auth.get("login_path", "/api/auth/login")),
-            telnet_host=str(telnet.get("host", "localhost")),
-            telnet_port=int(telnet.get("port", 6969)),
-            telnet_replace_existing=replace_existing,
-            knowledge_base_url=str(knowledge.get("base_url", auth_base_url)).rstrip("/"),
-            knowledge_path=str(knowledge.get("path", "/api/v1/agent-knowledge")),
-            ollama_base_url=str(ollama.get("base_url", "http://localhost:9081")).rstrip("/"),
-            ollama_path=str(ollama.get("path", "/ollama/completions")),
-            database=database,
-            collection_name=collection_name,
-            collection_path=collection_path,
-            connections_path=connections_path,
-            control_host=control_host,
-            control_port=control_port,
-        )
+        return cls(auth_base_url=auth_base_url, login_path=str(auth.get("login_path", "/api/auth/login")), telnet_host=str(telnet.get("host", "localhost")), telnet_port=int(telnet.get("port", 6969)), telnet_replace_existing=replace_existing, knowledge_base_url=str(knowledge.get("base_url", auth_base_url)).rstrip("/"), knowledge_path=str(knowledge.get("path", "/api/v1/agent-knowledge")), ollama_base_url=str(ollama.get("base_url", "http://localhost:9081")).rstrip("/"), ollama_path=str(ollama.get("path", "/ollama/completions")), database=database, collection_name=collection_name, collection_path=collection_path, connections_path=connections_path, control_host=control_host, control_port=control_port)
 
 
 def _section(raw: Dict[str, Any], name: str) -> Dict[str, Any]:

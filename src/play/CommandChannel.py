@@ -15,11 +15,7 @@ _PAGER = "[hit enter to continue]"
 _REPLACE = "do you wish to connect anyway"
 _REPLACE_AGAIN = "please type y or n"
 _SAVING = "that character is being saved"
-_REJECTED = (
-    "authentication failed",
-    "invalid authentication message",
-    "your site has been banned from this mud",
-)
+_REJECTED = ("authentication failed", "invalid authentication message", "your site has been banned from this mud")
 
 
 def is_prompt(line: str) -> bool:
@@ -41,15 +37,7 @@ class CommandChannel:
     `N` declines it and raises SessionDeclined.
     """
 
-    def __init__(
-        self,
-        client,
-        timeout_s: float = 5.0,
-        poll_interval_s: float = 0.05,
-        replace_existing: str = "Y",
-        clock: Optional[Callable[[], float]] = None,
-        sleep: Optional[Callable[[float], None]] = None,
-    ):
+    def __init__(self, client, timeout_s: float = 5.0, poll_interval_s: float = 0.05, replace_existing: str = "Y", clock: Optional[Callable[[], float]] = None, sleep: Optional[Callable[[float], None]] = None):
         self.client = client
         self.timeout_s = timeout_s
         self.poll_interval_s = poll_interval_s

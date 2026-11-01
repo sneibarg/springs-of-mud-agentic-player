@@ -18,13 +18,13 @@ The companion server is `springs-of-mud-server`. The login and telnet behavior f
 - `src/cli` is the operator invoker. `python -m cli` sends one known command. `src/net/local/ControlServer` accepts it on `127.0.0.1`. The transport is one raw TCP socket.
 - `src/net/AccountSession` connects a saved account and logs on with one character from that login.
 - `src/play` owns the first-login `Bootstrapper`, `CommandChannel`, help and world readers, and `WorldKnowledge`.
-- `src/memory` owns short-lived `WorkingMemory` for the current session: players, agentic players, mobiles, NPCs, rooms, `consider` readings, and aggressive mobiles. It is not part of the knowledge document.
+- `src/memory` owns short-lived `WorkingMemory` for the current session: players, agentic players, mobiles, NPCs, rooms, `ConsiderOpponent` records, conversations, and aggressive mobiles. It is not part of the knowledge document.
 - `src/prompt` loads `SOMDB.Prompts` and fills a prompt's tokens before that text is submitted to som-nlp-service.
 - `src/net/rest` retrieves the auth token, saves world knowledge, and calls the Ollama service. `AuthClient` posts to `/api/auth/login` and stores the `Authorization` response header, matching `springs-of-mud-ui`. `KnowledgeClient` puts the knowledge snapshot to the agent-knowledge API. `OllamaClient` posts to `/ollama/completions`.
 - `src/net/telnet` owns the telnet socket client and `PlayerSession`, which sends the server `logon` line.
-- `src/util` holds small shared helpers such as camelCase normalization.
+- `src/util` holds small shared helpers: camelCase conversion and reading or writing a JSON collection file.
 - `resources/agent.yml` holds auth URL, telnet host and port, the local control address, and the collection location.
-- `resources/collections/SOMDB.Agents.json` is the current `SOMDB.Agents` snapshot.
+- `resources/collections/SOMDB.Agents.json` is the current `SOMDB.Agents` snapshot. `SOMDB.Memories.json` is the local working-memory snapshot, one document per agent.
 
 ## Collection Data
 
@@ -38,6 +38,8 @@ The companion server is `springs-of-mud-server`. The login and telnet behavior f
 - `description` is designer-facing text.
 
 Leave passwords, JWTs, and telnet hosts out of agent documents. Saved account passwords live in `resources/connections.json`, obfuscated with base64 the same way `springs-of-mud-ui` stores them. Deobfuscate a password only for the login call. Do not log it or write it back as plaintext.
+
+`SOMDB.Memories.json` is a JSON array of session snapshots. Look a document up by `agentName`, the same local name as `Agents.name`. One document belongs to one agent. Its sections are `players`, `agenticPlayers`, `mobiles`, `npcs`, `aggressiveMobiles`, `rooms`, `commands`, `considers`, and `conversations`. Nested names use camelCase, such as `roomName` and `helpText`. This collection is not world knowledge.
 
 Read this collection directly while it stays small. If it grows large, add a local query tool and use that tool before pasting documents into context.
 
@@ -69,7 +71,7 @@ Default ports match the UI client: auth `http://localhost:8169`, telnet `localho
 A normal reply ends on a playing prompt such as `<20hp 100m 100mv>`. The next command is sent only after that prompt. An idle timeout with no prompt raises `PromptTimeout`.
 
 1. Drain the login burst until the playing prompt. Keep those lines on `WorldKnowledge.login_lines`.
-2. Send `commands`. Remember those names, in that order, on the session `WorkingMemory`. This step does not categorize them. For each name, send `help <name>` and store a `HelpTopic`. `learn_commands` remembers the same names, sends the server text as the user message of the `commands` prompt, and keeps the raw model response. `learn_help` then sends `help <name>` for each remembered command, submits that page as the user message of the `help` prompt, and stores the model's topics on that `HelpTopic` and as the session command's `help_text`. `bootstrap()` does not call either Ollama step.
+2. Send `commands`. Remember those names, in that order, on the session `WorkingMemory`. For each name, send `help <name>` and store a `HelpTopic`. `learn_categories` runs before that list: it sends bare `help`, asks the `categories` prompt to read the two-column index, and stores each command's category on working memory. A category already stored is left in place. `learn_commands` then remembers the `commands` list without clearing those categories. `learn_help` sends `help <name>` for each command in that list, and also for a command the help index stored that the list omitted, such as `!`. When the command already has a category, the `help` prompt is sent unchanged. When it does not, that request also asks for one category chosen from the names already stored. The model's topics are stored on the `HelpTopic` and as the session command's `help_text`. A page with no help still receives a category. `bootstrap()` does not call these Ollama steps.
 3. Send `areas` and store `AreaRecord` entries from the two-column, 39-character layout (`[level] author: name`).
 4. Send `who` and store `PlayerRecord` entries. A player is `agentic` when the character name matches an agent document. The logged-in character is `self_character`.
 5. Send `look`. Store the room, exits, and item lines. Classify people in the room:
@@ -113,10 +115,12 @@ The process starts in `idle` and answers `idle`, `play`, `memory`, `output`, `co
 - `remember_commands` keeps the names from the server `commands` list, in the order they were offered. `remember_command` can store a category and the help text later. Remembering the name again without a category or help text leaves the stored values in place.
 - `remember_room` keeps each room seen this session: name, description, and exits. A later look at the same room updates those fields. An empty description or exit list leaves the stored values in place.
 - `CommandCategorizer` is the later categorization phase. It fills `{command}` and `{help}` on a prompt and sends that body through `OllamaClient`. First login does not call it, and no command-category prompt is in `SOMDB.Prompts` yet.
-- `remember_consider` stores one `consider` reply. The survival lines are the seven strings from `springs-of-mud-server` `Info.do_consider`. `outlook` is `safe`, `even`, `risky`, or `fatal`. A refusal such as `They're not here.` stays stored with `outlook` `unknown`.
+- `remember_consider` stores one `ConsiderOpponent`. The survival lines are the seven strings from `springs-of-mud-server` `Info.do_consider`. `outlook` is `safe`, `even`, `risky`, or `fatal`. A refusal such as `They're not here.` stays stored with `outlook` `unknown`.
+- `remember_conversation` stores one `Conversation`: topic, participants, a location of `channel`, `tells`, or `room`, the location name, and the agent's `interest` priority. The same topic, location, and location name stay one conversation. A later call with participants replaces that list. Omitting interest leaves the stored priority. `set_interest` changes it. A higher integer is a higher priority. `conversations` lists the highest interest first.
 - `note_aggressive` and a room line ending in `is here, fighting YOU!` mark a mobile aggressive. Seeing that mobile again does not clear the flag.
 - `absorb_world` copies the current world snapshot, including the current room, and keeps rooms already remembered.
-- `write_review(path)` writes `to_review()` as indented JSON: players, agentic players, mobiles, npcs, aggressive mobiles, rooms, commands, and consider readings. The same consider stored under a target and a subject is written once.
+- `write_review(path)` writes `to_review()` as indented JSON: players, agentic players, mobiles, npcs, aggressive mobiles, rooms, commands, considered opponents, and conversations. The same consider stored under a target and a subject is written once.
+- `write_collection(agent_name)` upserts that snapshot into `resources/collections/SOMDB.Memories.json`. The document's `agentName` is the lookup field. A later dump for the same agent, ignoring case, replaces that document and leaves other agents in place. Pass a path to write a different collection file. The `memory` command still writes the review file and does not call this dump.
 
 ## Prompts
 
@@ -126,7 +130,8 @@ The process starts in `idle` and answers `idle`, `play`, `memory`, `output`, `co
 
 ## Coding Conventions
 
-- Follow the Springs of MUD Python style used by the server and UI. Modules that export a primary type use PascalCase filenames. Domain objects are dataclasses with `from_json`.
+- Format Python with the `compact-python` skill at `.grok/skills/compact-python/SKILL.md`. That skill is the formatting rule for this repository. There is no line-length limit. Put class bases, constructor parameter lists, function parameter lists, calls, collections, parenthesized imports, dotted chains, and backslash continuations on one line. Drop a trailing comma that only kept a closer on its own line. Keep the comma in a one-element tuple, including a subscript such as `a[index,]`. Keep blank lines between related blocks, newlines inside strings and docstrings, and any body with more than one statement. Keep a class suite under its header, including a subclass whose body is only a docstring or `pass`. Keep a function suite under its header. A wrapper that immediately returns an updated value is two lines: the signature, then the return. Keep `try`, `with`, `for`, `while`, `if`, and `match` headers that introduce a suite. Leave names, literals, control flow, and behavior unchanged. After a formatting edit, run `python -m py_compile` on each changed file. Do not run Black, Ruff, PEP 8, or another formatter afterward.
+- A class or dataclass that has functions, or that is about to gain them, lives in its own file. Name that file with the type's PascalCase name. Extract the type before adding the function when it currently shares a module. A class whose body is only fields, a docstring, or `pass` may stay beside the code that uses it. Domain objects are dataclasses with `from_json`.
 - Normalize camelCase collection and service fields to snake_case at the boundary. Internal fields stay snake_case.
 - Registries expose lookup by agent name. Raise when a required agent is missing or disabled.
 - Keep game sockets inside `src/net`. The local control listener is `src/net/local`. The CLI invoker is the other end of that socket. `src/play` may send and read lines through `CommandChannel`, and agent documents do not open sockets.
@@ -135,7 +140,7 @@ The process starts in `idle` and answers `idle`, `play`, `memory`, `output`, `co
 
 ## Testing
 
-Use `unittest`. Tests add `src` to `sys.path`. `tests.test_local_control` binds `127.0.0.1` on an ephemeral port. `tests.test_live_logon` connects profile `SpringsOfMUD` and logs on its lowest-level character when that profile's auth service and telnet port are accepting connections. It skips when they are not. `tests.test_live_working_memory` uses that same logon. `test_live_working_memory_mobiles` records a mobile from the live room and a `consider` reading. `test_live_working_memory_players` records another player from `who` and `look`, including that player's auras, room, and `consider` reading. `test_live_working_memory_rooms` records two rooms after one move. Each test quits before it returns, and each skips when auth or telnet is closed. `tests.test_live_command_bootstrap` uses that same logon, sends `commands`, and asks the `commands` prompt. It then sends `help` for each remembered command and asks the `help` prompt. It writes `tests/output/test_live_command_bootstrap.json` with every Ollama prompt and raw response, then quits. It skips when auth, telnet, or Ollama is closed. The other tests do not open a telnet session or call a live auth, knowledge, or model service.
+Use `unittest`. Tests add `src` to `sys.path`. `tests.test_local_control` binds `127.0.0.1` on an ephemeral port. `tests.test_live_logon` connects profile `SpringsOfMUD` and logs on its lowest-level character when that profile's auth service and telnet port are accepting connections. It skips when they are not. `tests.test_live_working_memory` uses that same logon. `test_live_working_memory_mobiles` records a mobile from the live room and a `ConsiderOpponent`. `test_live_working_memory_players` records another player from `who` and `look`, including that player's auras, room, and `ConsiderOpponent`. `test_live_working_memory_rooms` records two rooms after one move. Each test quits before it returns, and each skips when auth or telnet is closed. `tests.test_live_command_bootstrap` uses that same logon. It sends bare `help` and asks the `categories` prompt, then sends `commands` and asks the `commands` prompt, then sends `help` for each command in that list and for any help-index command the list omitted. Each page goes to the help prompt. A command the index did not categorize asks that prompt for a category as well. It writes `tests/output/test_live_command_bootstrap.json` with every Ollama prompt and raw response, then quits. `test_live_help_categories` sends only bare `help`, asks the `categories` prompt, writes `tests/output/test_live_help_categories.json` with that prompt and raw response, and quits. It does not send `commands` or read individual help pages. Both skip when auth, telnet, or Ollama is closed. The other tests do not open a telnet session or call a live auth, knowledge, or model service.
 
 Run focused tests for the area you changed:
 
@@ -158,6 +163,7 @@ python -m unittest tests.test_gameplay_output
 python -m unittest tests.test_local_control
 python -m unittest tests.test_live_logon
 python -m unittest tests.test_live_working_memory
+python -m unittest tests.test_live_command_bootstrap.TestLiveCommandBootstrap.test_live_help_categories
 python -m unittest tests.test_live_command_bootstrap
 python -m unittest discover -s tests
 ```

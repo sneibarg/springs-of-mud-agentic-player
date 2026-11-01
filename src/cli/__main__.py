@@ -5,11 +5,7 @@ from cli.ControlClient import ControlClient, UnknownCommand
 from cli.ControlProtocol import DEFAULT_HOST, DEFAULT_PORT
 
 
-USAGE = (
-    "Usage: python -m cli [--port PORT] <command>\n"
-    "Commands: idle, play, list, connect <name>, logon <name>, "
-    "memory [path], output [on|off|file [off|path]]"
-)
+USAGE = "Usage: python -m cli [--port PORT] <command>\n" "Commands: idle, play, list, connect <name>, logon <name>, " "memory [path], output [on|off|file [off|path]]"
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -1,0 +1,14 @@
+[
+  {
+    "agentName": "example-agent",
+    "players": [],
+    "agenticPlayers": [],
+    "mobiles": [],
+    "npcs": [],
+    "aggressiveMobiles": [],
+    "rooms": [],
+    "commands": [],
+    "considers": [],
+    "conversations": []
+  }
+]

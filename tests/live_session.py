@@ -117,11 +117,7 @@ def open_live_play() -> LivePlay | None:
     if not auth_url or not _tcp_open(telnet_host, telnet_port):
         return None
 
-    account = AccountSession(
-        ConnectionCatalog([replace(saved, server_url=auth_url)]),
-        telnet_host=telnet_host,
-        telnet_port=telnet_port,
-    )
+    account = AccountSession(ConnectionCatalog([replace(saved, server_url=auth_url)]), telnet_host=telnet_host, telnet_port=telnet_port)
     try:
         connected = account.connect(PROFILE)
         if not connected.startswith("Connected as ") or "failed" in connected.lower():

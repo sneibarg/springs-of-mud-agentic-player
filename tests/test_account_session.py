@@ -40,16 +40,7 @@ class _Client:
 
 
 def _catalog():
-    return ConnectionCatalog([
-        SavedConnection(
-            name="SpringsOfMUD",
-            server_url="http://localhost:8169",
-            account_name="sneibarg",
-            telnet_host="malboji",
-            telnet_port=6969,
-            obfuscated_password=obfuscate_password("secret"),
-        )
-    ])
+    return ConnectionCatalog([SavedConnection(name="SpringsOfMUD", server_url="http://localhost:8169", account_name="sneibarg", telnet_host="malboji", telnet_port=6969, obfuscated_password=obfuscate_password("secret"))])
 
 
 class TestAccountSession(unittest.TestCase):
@@ -59,17 +50,7 @@ class TestAccountSession(unittest.TestCase):
 
         def post(url, json, timeout):
             captured["json"] = json
-            return _Response(
-                {
-                    "id": "account-1",
-                    "accountName": "sneibarg",
-                    "playerCharacterList": [
-                        {"id": "char-1", "name": "Example"},
-                        {"id": "char-2", "name": "Other"},
-                    ],
-                },
-                {"Authorization": "jwt-token"},
-            )
+            return _Response({"id": "account-1", "accountName": "sneibarg", "playerCharacterList": [{"id": "char-1", "name": "Example"}, {"id": "char-2", "name": "Other"}]}, {"Authorization": "jwt-token"})
 
         def auth_client(base_url):
             return AuthClient(base_url, post=post)
@@ -79,11 +60,7 @@ class TestAccountSession(unittest.TestCase):
             clients.append((host, port, client))
             return PlayerSession(TelnetConfig(host=host, port=port), client=client)
 
-        account = AccountSession(
-            _catalog(),
-            auth_client_factory=auth_client,
-            session_factory=session_factory,
-        )
+        account = AccountSession(_catalog(), auth_client_factory=auth_client, session_factory=session_factory)
 
         self.assertEqual(account.list_characters(), "Connect an account before listing characters.")
         connected = account.connect("SpringsOfMUD")
@@ -91,10 +68,7 @@ class TestAccountSession(unittest.TestCase):
         self.assertEqual(captured["json"]["accountName"], "sneibarg")
         self.assertEqual(captured["json"]["password"], "secret")
         self.assertNotIn("secret", connected)
-        self.assertEqual(
-            account.list_characters(),
-            "Available characters:\n- Example\n- Other",
-        )
+        self.assertEqual(account.list_characters(), "Available characters:\n- Example\n- Other")
         refused = account.logon("Nobody")
         self.assertIn("not available", refused)
         self.assertFalse(account.logged_on)
@@ -115,57 +89,23 @@ class TestAccountSession(unittest.TestCase):
         opened = {}
 
         def post(url, json, timeout):
-            return _Response(
-                {
-                    "id": "account-2",
-                    "accountName": "neibarge",
-                    "playerCharacterList": [{"id": "char-9", "name": "Alt"}],
-                },
-                {"Authorization": "jwt-token"},
-            )
+            return _Response({"id": "account-2", "accountName": "neibarge", "playerCharacterList": [{"id": "char-9", "name": "Alt"}]}, {"Authorization": "jwt-token"})
 
         def session_factory(host, port):
             opened["endpoint"] = (host, port)
             return PlayerSession(TelnetConfig(host=host, port=port), client=_Client())
 
-        catalog = ConnectionCatalog([
-            SavedConnection(
-                name="SpringsOfMUD-alt",
-                server_url="",
-                account_name="neibarge",
-                telnet_host=None,
-                telnet_port=None,
-                obfuscated_password=obfuscate_password("secret"),
-            )
-        ])
-        account = AccountSession(
-            catalog,
-            auth_base_url="http://localhost:8169",
-            telnet_host="localhost",
-            telnet_port=6969,
-            auth_client_factory=lambda base_url: AuthClient(base_url, post=post),
-            session_factory=session_factory,
-        )
+        catalog = ConnectionCatalog([SavedConnection(name="SpringsOfMUD-alt", server_url="", account_name="neibarge", telnet_host=None, telnet_port=None, obfuscated_password=obfuscate_password("secret"))])
+        account = AccountSession(catalog, auth_base_url="http://localhost:8169", telnet_host="localhost", telnet_port=6969, auth_client_factory=lambda base_url: AuthClient(base_url, post=post), session_factory=session_factory)
         account.connect("SpringsOfMUD-alt")
         self.assertEqual(account.logon("Alt"), "Logged on as Alt.")
         self.assertEqual(opened["endpoint"], ("localhost", 6969))
 
     def test_connect_accepts_a_login_without_an_authorization_header(self):
         def post(url, json, timeout):
-            return _Response(
-                {
-                    "id": "account-1",
-                    "accountName": "sneibarg",
-                    "playerCharacterList": [{"id": "char-2", "name": "Janky", "level": 8}],
-                },
-                {},
-            )
+            return _Response({"id": "account-1", "accountName": "sneibarg", "playerCharacterList": [{"id": "char-2", "name": "Janky", "level": 8}]}, {})
 
-        account = AccountSession(
-            _catalog(),
-            auth_client_factory=lambda base_url: AuthClient(base_url, post=post),
-            session_factory=lambda host, port: PlayerSession(TelnetConfig(host=host, port=port), client=_Client()),
-        )
+        account = AccountSession(_catalog(), auth_client_factory=lambda base_url: AuthClient(base_url, post=post), session_factory=lambda host, port: PlayerSession(TelnetConfig(host=host, port=port), client=_Client()))
         connected = account.connect("SpringsOfMUD")
         self.assertEqual(connected, "Connected as sneibarg. Characters: Janky.")
         self.assertIsNone(account.auth_client.jwt_token)
