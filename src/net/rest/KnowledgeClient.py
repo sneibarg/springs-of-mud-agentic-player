@@ -14,6 +14,7 @@ class KnowledgeClient:
     - Both calls send the login `Authorization` header when one is present.
     - The body is the camelCase document produced by `WorldKnowledge.to_document`.
       `characterId` in the body matches the path. A PUT replaces the whole snapshot.
+      `commands` keeps each command's name, category, and helpText in server order.
       Mobiles, npcs, and players include `auras`.
     """
 

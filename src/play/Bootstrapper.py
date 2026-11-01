@@ -1,7 +1,7 @@
 import json
 import logging
 
-from typing import Iterable, Optional
+from typing import Callable, Iterable, Optional
 
 from memory.WorkingMemory import WorkingMemory
 from net.rest.OllamaClient import OllamaClient, OllamaError
@@ -27,7 +27,7 @@ class Bootstrapper:
     index does not list is categorized from its own help page.
     """
 
-    def __init__(self, session, agent_character_names: Iterable[str], self_character: str, channel: Optional[CommandChannel] = None, help_reader: Optional[HelpReader] = None, world_reader: Optional[WorldReader] = None, memory: Optional[WorkingMemory] = None, replace_existing: str = "Y"):
+    def __init__(self, session, agent_character_names: Iterable[str], self_character: str, channel: Optional[CommandChannel] = None, help_reader: Optional[HelpReader] = None, world_reader: Optional[WorldReader] = None, memory: Optional[WorkingMemory] = None, replace_existing: str = "Y", on_commands: Optional[Callable[[WorldKnowledge], None]] = None):
         self.channel = channel or CommandChannel(session.client, replace_existing=replace_existing)
         self.agent_character_names = {name.strip().lower() for name in agent_character_names if name and str(name).strip()}
         self.self_character = self_character.strip()
@@ -35,15 +35,21 @@ class Bootstrapper:
         self.world_reader = world_reader or WorldReader()
         self.memory = memory if memory is not None else WorkingMemory()
         self.knowledge = WorldKnowledge()
+        self._on_commands = on_commands
 
     def bootstrap(self) -> WorldKnowledge:
         self.knowledge.login_lines = self.channel.read_until_prompt()
         if not self.channel.saw_prompt:
             raise PromptTimeout("No playing prompt after logon.", self.knowledge.login_lines)
+        self.memory.replace_commands([])
         command_names = self._remember_commands()
         logger.info("Reading help for the commands the server made available.")
         for topic in self.help_reader.read_named(self.channel, command_names):
             self.knowledge.remember_help(topic)
+        self._publish_commands()
+        for command in self.knowledge.command_records():
+            if command.help_text.strip():
+                self.memory.remember_command(command.name, help_text=command.help_text)
 
         logger.info("Reading areas, players, and the current room.")
         for area in self.world_reader.read_areas(self.channel):
@@ -71,6 +77,7 @@ class Bootstrapper:
         except OllamaError as exc:
             response = ""
             error = str(exc)
+        self._publish_commands()
         return CommandLesson(prompt=request, response=response, commands=names, error=error)
 
     def learn_categories(self, prompt: Prompt, client: OllamaClient) -> CategoryLesson:
@@ -95,6 +102,7 @@ class Bootstrapper:
         parsed, _parse_error = lesson.parsed_categories()
         if parsed:
             self._remember_categories(parsed)
+        self._publish_commands()
         return lesson
 
     def learn_help(self, prompt: Prompt, client: OllamaClient, names: list[str] | None = None, on_lesson=None) -> list[HelpLesson]:
@@ -123,6 +131,7 @@ class Bootstrapper:
             lessons.append(lesson)
             if on_lesson is not None:
                 on_lesson(lesson)
+        self._publish_commands()
         return lessons
 
     def commands_for_help(self, listed: list[str] | None = None) -> list[str]:
@@ -172,6 +181,18 @@ class Bootstrapper:
             topic.keyword = ""
             topic.text = ""
         self.knowledge.remember_help(topic)
+
+    def _publish_commands(self) -> None:
+        """Copy the session command list onto world knowledge and persist it when a saver is installed."""
+        self.knowledge.replace_commands(self.memory.commands())
+        for command in self.knowledge.command_records():
+            if command.help_text.strip():
+                continue
+            topic = self.knowledge.help_for(command.name)
+            if topic is not None and str(topic.text or "").strip():
+                command.help_text = topic.text.strip()
+        if self._on_commands is not None:
+            self._on_commands(self.knowledge)
 
     def _remember_commands(self) -> list[str]:
         """Store the names from `commands`. This step does not categorize them."""

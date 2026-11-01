@@ -25,7 +25,7 @@ The valid target repositories are:
 
 ## Find the gaps
 
-Read `AGENTS.md` and `AGENTS.override.md` at the repo root. Include every section. When a convention names a skill, read that skill. Python formatting is `.grok/skills/compact-python/SKILL.md`. When a standard requires a collection change, name the collection skill that owns that work.
+Read `AGENTS.md` and `AGENTS.override.md` at the repo root. Include every section. Read each file cited in the Reference section and treat it as part of the standards. When a convention names a skill, read that skill. Python formatting is `.grok/skills/compact-python/SKILL.md`. When a standard requires a collection change, name the collection skill that owns that work.
 
 Compare `src/` and `tests/` with those standards. Skip virtual environments, `site-packages`, and `__pycache__`. Record each gap for the report. Use Coding Conventions for which class or dataclass belongs in its own file. A gap also includes code that sits in a package `AGENTS.md` assigns elsewhere, and formatting the compact-python skill would still collapse.
 
@@ -33,7 +33,7 @@ A proposal preserves behavior except where a standard requires a move or a file 
 
 Record a formatting proposal after any move that touches the same file.
 
-Also compare boundary naming, registries, where sockets live, logging, and telnet negotiation. When a proposed move changes a path that the Testing section tells the operator to run, record that path update in `AGENTS.md` as its own proposed change. Proposals leave product rules unchanged.
+Also compare boundary naming, registries, where sockets live, logging, and telnet negotiation. When a proposed move changes a path that the Testing reference tells the operator to run, record that path update in `docs/reference/Testing.md` as its own proposed change. Proposals leave product rules unchanged.
 
 Propose a change to `resources/agent.yml`, `resources/connections.json`, or a collection document only when a standard requires that change. Omit passwords, JWTs, and `Authorization` headers from the report.
 

@@ -26,7 +26,7 @@ def accepted_command(line: str) -> Optional[str]:
         return None
     verb = parts[0].lower()
     args = parts[1:]
-    if verb in {"idle", "play", "list"}:
+    if verb in {"idle", "play", "list", "bootstrap"}:
         return verb if not args else None
     if verb == "connect":
         return "connect " + " ".join(args) if args else None

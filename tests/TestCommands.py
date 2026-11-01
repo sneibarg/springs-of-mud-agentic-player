@@ -9,7 +9,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from memory.Conversation import Conversation
-from memory.WorkingMemory import WorkingMemory, default_collection_path
+from memory.WorkingMemory import WorkingMemory
 from play.WorldKnowledge import BeingRecord, PlayerRecord, RoomSnapshot, WorldKnowledge
 
 
@@ -29,6 +29,8 @@ class TestCommands(unittest.TestCase):
         memory.absorb_world(WorldKnowledge())
         self.assertEqual([command.name for command in memory.commands()], ["look", "help", "who"])
         self.assertEqual(memory.to_review()["commands"][0], {"name": "look", "category": "information", "help_text": "Look around."})
+        memory.replace_commands(memory.commands()[:1])
+        self.assertEqual([(command.name, command.category, command.help_text) for command in memory.commands()], [("look", "information", "Look around.")])
 
         with self.assertRaises(ValueError):
             memory.remember_command("   ")

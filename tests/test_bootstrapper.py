@@ -65,11 +65,23 @@ class TestBootstrapper(unittest.TestCase):
         client = _ScriptedClient(opening=["Welcome to the server!", "<10hp 10m 10mv>"], replies={"commands": ["look          help          areas         who           "], "help look": ["LOOK", "Look around."], "help help": ["HELP", "Read a help page."], "help areas": ["AREAS", "List the areas."], "help who": ["WHO", "See who is playing."], "areas": [f"{'[1-5] Romy: Temple of Mota':<39}"], "who": ["[1    human    Mag] Example the agent", "Players found: 1"], "look": ["Temple of Mota", "\t\tA quiet temple.", "A goblin is here.", "Marcus is here.", "Example is resting here."]})
         clock = _Clock()
         channel = CommandChannel(client, timeout_s=1.0, clock=clock, sleep=clock.sleep)
-        bootstrapper = Bootstrapper(None, ["Example", "Other"], "Example", channel=channel)
+        published = {}
+
+        def on_commands(snapshot):
+            published["names"] = [command.name for command in snapshot.command_records()]
+            published["help"] = snapshot.help_for("look").text
+            published["areas"] = len(snapshot.areas)
+
+        bootstrapper = Bootstrapper(None, ["Example", "Other"], "Example", channel=channel, on_commands=on_commands)
         knowledge = bootstrapper.bootstrap()
 
         self.assertEqual(client.sent, ["commands", "help look", "help help", "help areas", "help who", "areas", "who", "look"])
+        self.assertEqual(published["names"], ["look", "help", "areas", "who"])
+        self.assertEqual(published["help"], "Look around.")
+        self.assertEqual(published["areas"], 0)
         self.assertEqual([command.name for command in bootstrapper.memory.commands()], ["look", "help", "areas", "who"])
+        self.assertEqual([command.help_text for command in bootstrapper.memory.commands()], ["Look around.", "Read a help page.", "List the areas.", "See who is playing."])
+        self.assertEqual([command.help_text for command in knowledge.command_records()], ["Look around.", "Read a help page.", "List the areas.", "See who is playing."])
         self.assertTrue(all(command.category == "" for command in bootstrapper.memory.commands()))
         self.assertEqual(knowledge.login_lines, ["Welcome to the server!"])
         self.assertEqual(knowledge.help_for("look").text, "Look around.")
@@ -157,6 +169,7 @@ class TestBootstrapper(unittest.TestCase):
         restored = WorldKnowledge.from_document(document)
         self.assertEqual(restored.help_for("look").topics[0].text, "Look around.")
         self.assertTrue(restored.help_for("xyz").missing)
+        self.assertEqual([(command.name, command.category, command.help_text) for command in restored.command_records()], [("look", "information", "Look around."), ("xyz", "other", "")])
 
     def test_unparsed_help_keeps_the_response_and_the_server_topic(self):
         client = _ScriptedClient(opening=[], replies={"help look": ["LOOK", "Look around."]})

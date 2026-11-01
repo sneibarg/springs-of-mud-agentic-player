@@ -57,6 +57,7 @@ class TestKnowledgeClient(unittest.TestCase):
         knowledge = WorldKnowledge()
         knowledge.login_lines = ["Welcome to the server!"]
         knowledge.remember_help(HelpTopic(command="look", keyword="LOOK", text="Look around.", raw="LOOK\nLook around."))
+        knowledge.remember_command("look", category="information", help_text="Look around.")
         knowledge.remember_area(AreaRecord(name="Temple of Mota", author="Romy", level_range="1-5"))
         knowledge.remember_mobile(BeingRecord(name="a healer", kind="mobile", pose="here", room_name="Temple of Mota", auras=["White Aura"]))
         knowledge.remember_npc(BeingRecord(name="Hassan", kind="npc", pose="standing", room_name="Temple of Mota", auras=["Golden Aura"]))
@@ -79,6 +80,14 @@ class TestKnowledgeClient(unittest.TestCase):
         self.assertEqual(document["npcs"][0]["auras"], ["Golden Aura"])
         self.assertEqual(document["players"][0]["auras"], ["Red Aura"])
         self.assertEqual(restored.player_named("Example").auras, ["Red Aura"])
+        self.assertEqual(document["commands"][0]["helpText"], "Look around.")
+        self.assertEqual(restored.command_records()[0].category, "information")
+
+    def test_help_topics_supply_commands_when_the_command_list_is_absent(self):
+        knowledge = WorldKnowledge.from_document({"helpTopics": [{"command": "look", "keyword": "LOOK", "text": "Look around.", "raw": "LOOK", "missing": False, "topics": []}]})
+        self.assertTrue(knowledge.has_commands())
+        self.assertEqual([(command.name, command.help_text) for command in knowledge.command_records()], [("look", "Look around.")])
+        self.assertEqual(knowledge.to_document(character_id="char-1", character_name="Example", agent_name="example-agent")["commands"], [])
 
 
 if __name__ == "__main__":

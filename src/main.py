@@ -22,6 +22,7 @@ from net.telnet.PlayerSession import PlayerSession
 from net.telnet.TelnetClient import TelnetConfig
 from play.Bootstrapper import Bootstrapper
 from play.PlayError import PlayError
+from play.WorldKnowledge import WorldKnowledge
 
 
 logger = logging.getLogger(__name__)
@@ -63,10 +64,15 @@ def run_agent(agent_name: str, config: AgentConfig) -> int:
         nonlocal played
         played = _begin_play(account, registry, agent, config, memory, memory_client, memory_ready)
 
+    def on_bootstrap() -> None:
+        nonlocal played
+        if _begin_play(account, registry, agent, config, memory, memory_client, memory_ready, force=True):
+            played = True
+
     try:
         server.start()
         print(f"Control listening on {server.host}:{server.bound_port}", flush=True)
-        control.drive(on_play, connected=lambda: account.session is None or account.session.client.connected)
+        control.drive(on_play, on_bootstrap=on_bootstrap, connected=lambda: account.session is None or account.session.client.connected)
     except PlayError as exc:
         print(str(exc), file=sys.stderr)
         return 1
@@ -82,12 +88,26 @@ def run_agent(agent_name: str, config: AgentConfig) -> int:
     return 0
 
 
-def _begin_play(account: AccountSession, registry, agent, config, memory, memory_client: MemoryClient, memory_ready: bool) -> bool:
+def _begin_play(account: AccountSession, registry, agent, config, memory, memory_client: MemoryClient, memory_ready: bool, force: bool = False) -> bool:
     if not account.logged_on:
         print("Log on with an available character before play.", file=sys.stderr)
         return False
     character = account.character
-    knowledge = Bootstrapper(account.session, [item.character_name for item in registry.all()], character.name, memory=memory, replace_existing=config.telnet_replace_existing).bootstrap()
+    if not force:
+        stored, loaded = _load_knowledge(config, account.auth_client, character.id)
+        if not loaded:
+            return False
+        if stored is not None:
+            knowledge = WorldKnowledge.from_document(stored)
+            if knowledge.has_commands():
+                memory.replace_commands(knowledge.command_records())
+                print(f"Commands: {len(memory.commands())} restored from knowledge.")
+                return True
+
+    def publish(knowledge: WorldKnowledge) -> None:
+        _save_knowledge(config, account.auth_client, character.id, knowledge.to_document(character_id=character.id, character_name=character.name, agent_name=agent.name))
+
+    knowledge = Bootstrapper(account.session, [item.character_name for item in registry.all()], character.name, memory=memory, replace_existing=config.telnet_replace_existing, on_commands=publish).bootstrap()
     memory.absorb_world(knowledge)
     _save_knowledge(config, account.auth_client, character.id, knowledge.to_document(character_id=character.id, character_name=character.name, agent_name=agent.name))
     if memory_ready:
@@ -123,6 +143,17 @@ def _save_memory(client: MemoryClient, agent_name: str, memory: WorkingMemory) -
     except (MemoryStoreError, ValueError) as exc:
         logger.warning("Working memory was not saved: %s", exc)
         print(f"Working memory was not saved: {exc}", file=sys.stderr)
+
+
+def _load_knowledge(config: AgentConfig, auth_client: AuthClient, character_id: str) -> tuple[dict | None, bool]:
+    headers = auth_client.get_auth_headers if auth_client is not None else (lambda: {})
+    client = KnowledgeClient(config.api_base_url, path=config.knowledge_path, headers_provider=headers)
+    try:
+        return client.load(character_id), True
+    except (KnowledgeStoreError, ValueError) as exc:
+        logger.warning("World knowledge was not loaded: %s", exc)
+        print(f"World knowledge was not loaded: {exc}", file=sys.stderr)
+        return None, False
 
 
 def _save_knowledge(config: AgentConfig, auth_client: AuthClient, character_id: str, document: dict) -> None:

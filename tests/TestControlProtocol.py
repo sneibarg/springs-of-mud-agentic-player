@@ -47,6 +47,7 @@ class TestControlProtocol(unittest.TestCase):
         self.assertEqual(accepted_command("  PLAY  "), "play")
         self.assertEqual(accepted_command("Idle"), "idle")
         self.assertEqual(accepted_command("list"), "list")
+        self.assertEqual(accepted_command("Bootstrap"), "bootstrap")
         self.assertEqual(accepted_command("connect Springs Of MUD"), "connect Springs Of MUD")
         self.assertEqual(accepted_command("LOGON Example"), "logon Example")
         self.assertEqual(accepted_command("memory"), "memory")
@@ -56,7 +57,7 @@ class TestControlProtocol(unittest.TestCase):
         self.assertEqual(accepted_command("output file"), "output file")
         self.assertEqual(accepted_command("output FILE off"), "output file off")
         self.assertEqual(accepted_command("output file session log.txt"), "output file session log.txt")
-        for line in ("", "   ", "dance", "idle now", "connect", "logon", "list extra", "output sideways", "output on extra"):
+        for line in ("", "   ", "dance", "idle now", "connect", "logon", "list extra", "bootstrap extra", "output sideways", "output on extra"):
             self.assertIsNone(accepted_command(line), line)
 
     def test_handle_rejects_unknown_shapes_before_dispatch(self):

@@ -35,6 +35,19 @@ class SharedUtil:
         return value
 
     @staticmethod
+    def snake_tree(value: Any) -> Any:
+        if isinstance(value, dict):
+            converted = SharedUtil.camel_to_snake_case(value)
+            return {key: SharedUtil.snake_tree(item) for key, item in converted.items()}
+        if isinstance(value, list):
+            return [SharedUtil.snake_tree(item) for item in value]
+        return value
+
+    @staticmethod
+    def default_collection_path() -> Path:
+        return Path(__file__).resolve().parents[2] / "resources" / "collections" / "SOMDB.Memories.json"
+
+    @staticmethod
     def read_collection(path: Path) -> list:
         if not path.is_file():
             return []

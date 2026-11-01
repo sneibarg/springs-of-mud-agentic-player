@@ -100,6 +100,33 @@ class TestPlayerControl(unittest.TestCase):
             release.set()
             self._finish(control, lines, driver)
 
+    def test_bootstrap_runs_again_on_the_caller_thread(self):
+        lines = queue.Queue()
+        replies = []
+        calls = []
+
+        class _Account:
+            logged_on = True
+
+        control = PlayerControl(reader=lambda: _next_line(lines), writer=replies.append, account=_Account())
+        control.start()
+        driver = threading.Thread(target=lambda: control.drive(lambda: calls.append("play"), on_bootstrap=lambda: calls.append(threading.current_thread().name), wait_s=0.05), name="session")
+        driver.start()
+        try:
+            lines.put("bootstrap")
+            self.assertTrue(_wait_for(lambda: calls == ["session"]))
+            self.assertIn(PlayerControl.BOOTSTRAP_REPLY, replies)
+            self.assertEqual(control.mode, PlayerControl.IDLE)
+            lines.put("play")
+            self.assertTrue(_wait_for(lambda: calls == ["session", "play"]))
+            lines.put("bootstrap")
+            self.assertTrue(_wait_for(lambda: calls == ["session", "play", "session"]))
+        finally:
+            self._finish(control, lines, driver)
+
+        refused = PlayerControl(account=type("Account", (), {"logged_on": False})(), writer=lambda _text: None)
+        self.assertEqual(refused.handle("bootstrap"), "Log on with an available character before bootstrap.")
+
     def test_memory_writes_a_review_and_keeps_the_mode(self):
         lines = queue.Queue()
         replies = []

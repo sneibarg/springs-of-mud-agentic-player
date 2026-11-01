@@ -11,7 +11,6 @@ from util.SharedUtil import SharedUtil
 
 _KINDS = {"player", "mobile", "npc"}
 _FIGHTING_YOU = re.compile(r"^(?P<name>.+) is here, fighting YOU!$", re.IGNORECASE)
-_COLLECTION_FILE = "SOMDB.Memories.json"
 
 
 @dataclass
@@ -41,8 +40,9 @@ class SessionCommand:
 class WorkingMemory:
     """Short-lived memory for one play session.
 
-    This is not saved with world knowledge. Call `clear` when the session ends.
-    `to_collection` is the body for PUT /api/v1/agent-memory/{agentName}.
+    Command records are copied onto world knowledge when command bootstrap
+    finishes. The other sections stay on this session. Call `clear` when the
+    session ends. `to_collection` is the body for PUT /api/v1/agent-memory/{agentName}.
     `from_collection` restores that document. `write_collection` copies the
     session into the local Memories fixture.
     """
@@ -131,6 +131,13 @@ class WorkingMemory:
 
     def commands(self) -> list[SessionCommand]:
         return [self._commands[key] for key in self._command_order]
+
+    def replace_commands(self, commands) -> None:
+        """Replace the session command list. Later play reads these instead of bootstrapping again."""
+        self._commands.clear()
+        self._command_order.clear()
+        for command in commands:
+            self.remember_command(getattr(command, "name", ""), category=getattr(command, "category", "") or "", help_text=getattr(command, "help_text", "") or "")
 
     def remember_conversation(self, topic: str, location: str, location_name: str, *, participants: list[str] | None = None, interest: int | None = None) -> Conversation:
         """Remember one conversation.
@@ -240,7 +247,7 @@ class WorkingMemory:
         """Restore one Memories document. `savedAt` and `id` are ignored."""
         if not isinstance(document, dict):
             raise TypeError("Working memory document must be an object")
-        payload = _snake_tree(document)
+        payload = SharedUtil.snake_tree(document)
         if not str(payload.get("agent_name", "") or "").strip():
             raise ValueError("Working memory collection requires an agent name")
         memory = cls()
@@ -279,7 +286,7 @@ class WorkingMemory:
         if path is not None and not str(path).strip():
             raise ValueError("Working memory collection path is empty")
         document = self.to_collection(agent_name)
-        destination = Path(str(path).strip()) if path is not None else default_collection_path()
+        destination = Path(str(path).strip()) if path is not None else SharedUtil.default_collection_path()
         documents = SharedUtil.read_collection(destination)
         SharedUtil.write_collection(destination, _upsert_agent(documents, document))
         return str(destination)
@@ -331,10 +338,6 @@ class WorkingMemory:
         return being
 
 
-def default_collection_path() -> Path:
-    return Path(__file__).resolve().parents[2] / "resources" / "collections" / _COLLECTION_FILE
-
-
 def _upsert_agent(documents: list, document: dict) -> list:
     key = document["agentName"].strip().lower()
     updated = []
@@ -382,15 +385,6 @@ def _restore_consider(memory: WorkingMemory, item) -> None:
         return
     text = str(item.get("text", "") or "")
     memory.remember_consider(target, text.splitlines(), kind=kind, agentic=agentic)
-
-
-def _snake_tree(value):
-    if isinstance(value, dict):
-        converted = SharedUtil.camel_to_snake_case(value)
-        return {key: _snake_tree(item) for key, item in converted.items()}
-    if isinstance(value, list):
-        return [_snake_tree(item) for item in value]
-    return value
 
 
 def _copied_auras(record) -> list[str]:

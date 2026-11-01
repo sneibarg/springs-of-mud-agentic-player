@@ -14,7 +14,8 @@ class HelpReader:
     def read(self, channel: CommandChannel) -> list[HelpTopic]:
         return self.read_named(channel, parse_command_names(channel.exchange("commands")))
 
-    def read_named(self, channel: CommandChannel, names: list[str]) -> list[HelpTopic]:
+    @staticmethod
+    def read_named(channel: CommandChannel, names: list[str]) -> list[HelpTopic]:
         return [parse_help(name, channel.exchange(f"help {name}")) for name in names]
 
 

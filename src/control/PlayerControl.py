@@ -15,26 +15,29 @@ logger = logging.getLogger(__name__)
 class PlayerControl:
     """Operator commands for one agent process.
 
-    `handle` accepts `idle`, `play`, `memory`, `output`, `connect`, `list`, and
-    `logon`. The production caller is the localhost control socket. `start`
-    reads the same commands from an injected reader. The mode changes for
-    `idle` and `play`. `drive` runs on the caller thread and invokes `on_play`
-    once, the first time the mode is play. `connect` logs in a saved account.
-    `logon` accepts only a character from that account. `memory` and `output`
-    do not change the mode.
+    `handle` accepts `idle`, `play`, `bootstrap`, `memory`, `output`, `connect`,
+    `list`, and `logon`. The production caller is the localhost control socket.
+    `start` reads the same commands from an injected reader. The mode changes
+    for `idle` and `play`. `drive` runs on the caller thread and invokes
+    `on_play` once, the first time the mode is play. `bootstrap` asks that
+    same thread to bootstrap again. `connect` logs in a saved account.
+    `logon` accepts only a character from that account. `memory`, `output`,
+    and `bootstrap` do not change the mode.
     """
 
     IDLE = "idle"
     PLAY = "play"
+    BOOTSTRAP = "bootstrap"
     MEMORY = "memory"
     OUTPUT = "output"
     CONNECT = "connect"
     LIST = "list"
     LOGON = "logon"
     DEFAULT_MEMORY_PATH = "working-memory.json"
-    GREETING = "Idle. Commands: idle, play, memory, output, connect, list, logon."
+    GREETING = "Idle. Commands: idle, play, bootstrap, memory, output, connect, list, logon."
     IDLE_REPLY = "Idle."
     PLAY_REPLY = "Play."
+    BOOTSTRAP_REPLY = "Bootstrap."
     UNKNOWN_REPLY = UNKNOWN_COMMAND
 
     def __init__(self, reader: Optional[Callable[[], str]] = None, writer: Optional[Callable[[str], None]] = None, memory: Optional[WorkingMemory] = None, memory_path: str = DEFAULT_MEMORY_PATH, output: Optional[GameplayOutput] = None, account: Optional[AccountSession] = None):
@@ -47,6 +50,7 @@ class PlayerControl:
         self._mode = self.IDLE
         self._condition = threading.Condition()
         self._stop = threading.Event()
+        self._bootstrap_requested = False
         self._thread: Optional[threading.Thread] = None
 
     @property
@@ -79,16 +83,24 @@ class PlayerControl:
         if self._thread is not None:
             self._thread.join(timeout)
 
-    def drive(self, on_play: Callable[[], None], *, connected: Callable[[], bool] = lambda: True, wait_s: float = 0.2) -> None:
-        """Block until stop or disconnect. `on_play` runs on this thread, once."""
+    def drive(self, on_play: Callable[[], None], *, on_bootstrap: Optional[Callable[[], None]] = None, connected: Callable[[], bool] = lambda: True, wait_s: float = 0.2) -> None:
+        """Block until stop or disconnect. `on_play` runs on this thread, once. `on_bootstrap` runs each time bootstrap is requested."""
         played = False
         while True:
             with self._condition:
                 if self._stop.is_set() or not connected():
                     return
-                if self._mode != self.PLAY or played:
+                requested = self._bootstrap_requested
+                should_play = self._mode == self.PLAY and not played
+                if not requested and not should_play:
                     self._condition.wait(wait_s)
                     continue
+                if requested:
+                    self._bootstrap_requested = False
+            if requested:
+                if on_bootstrap is not None:
+                    on_bootstrap()
+                continue
             on_play()
             played = True
 
@@ -123,6 +135,8 @@ class PlayerControl:
         parts = line.split(maxsplit=1)
         command = parts[0]
         argument = parts[1] if len(parts) > 1 else ""
+        if command == self.BOOTSTRAP:
+            return self._request_bootstrap()
         if command == self.MEMORY:
             return self._dump_memory(argument)
         if command == self.OUTPUT:
@@ -148,6 +162,15 @@ class PlayerControl:
                 return self.PLAY_REPLY
         logger.info("Unknown control command.")
         return self.UNKNOWN_REPLY
+
+    def _request_bootstrap(self) -> str:
+        if self.account is not None and not self.account.logged_on:
+            return "Log on with an available character before bootstrap."
+        with self._condition:
+            self._bootstrap_requested = True
+            self._condition.notify_all()
+        logger.info("Bootstrap requested.")
+        return self.BOOTSTRAP_REPLY
 
     def _dump_memory(self, argument: str) -> str:
         path = argument.strip() or self.memory_path

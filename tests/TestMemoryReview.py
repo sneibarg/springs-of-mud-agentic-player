@@ -9,8 +9,9 @@ from pathlib import Path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from memory.Conversation import Conversation
-from memory.WorkingMemory import WorkingMemory, default_collection_path
+from memory.WorkingMemory import WorkingMemory
 from play.WorldKnowledge import BeingRecord, PlayerRecord, RoomSnapshot, WorldKnowledge
+from util.SharedUtil import SharedUtil
 
 
 
@@ -64,7 +65,7 @@ class TestMemoryReview(unittest.TestCase):
         self.assertEqual(document["considers"][0]["verdict"], "no_match")
         self.assertNotIn("agentic_players", document)
         self.assertNotIn("room_name", document["players"][0])
-        self.assertEqual(default_collection_path().name, "SOMDB.Memories.json")
+        self.assertEqual(SharedUtil.default_collection_path().name, "SOMDB.Memories.json")
 
     def test_collection_dump_replaces_the_same_agent(self):
         memory = WorkingMemory()

@@ -61,6 +61,15 @@ class RoomSnapshot:
     item_lines: list[str] = field(default_factory=list)
 
 
+@dataclass
+class CommandRecord:
+    """One command learned during bootstrap and stored with world knowledge."""
+
+    name: str
+    category: str = ""
+    help_text: str = ""
+
+
 def _key(value: str) -> str:
     return value.strip().lower()
 
@@ -76,6 +85,8 @@ class WorldKnowledge:
         self.npcs: dict[str, BeingRecord] = {}
         self.players: dict[str, PlayerRecord] = {}
         self.room: RoomSnapshot | None = None
+        self._commands: dict[str, CommandRecord] = {}
+        self._command_order: list[str] = []
 
     def remember_help(self, topic: HelpTopic) -> None:
         self.help_topics[_key(topic.command)] = topic
@@ -91,6 +102,41 @@ class WorldKnowledge:
 
     def remember_npc(self, being: BeingRecord) -> None:
         self.npcs[self._being_key(being)] = being
+
+    def remember_command(self, name: str, *, category: str = "", help_text: str = "") -> CommandRecord:
+        cleaned = str(name or "").strip().lower()
+        if not cleaned:
+            raise ValueError("A known command needs a name")
+        command = self._commands.get(cleaned)
+        if command is None:
+            command = CommandRecord(name=cleaned)
+            self._commands[cleaned] = command
+            self._command_order.append(cleaned)
+        if str(category or "").strip():
+            command.category = str(category).strip()
+        if str(help_text or "").strip():
+            command.help_text = str(help_text).strip()
+        return command
+
+    def replace_commands(self, commands) -> None:
+        """Replace the stored command list with this session's commands."""
+        self._commands.clear()
+        self._command_order.clear()
+        for command in commands:
+            self.remember_command(getattr(command, "name", ""), category=getattr(command, "category", "") or "", help_text=getattr(command, "help_text", "") or "")
+
+    def command_records(self) -> list[CommandRecord]:
+        """Commands in server order. Help topics supply the list when no command records were stored."""
+        if self._command_order:
+            return [self._commands[key] for key in self._command_order]
+        records = []
+        for topic in _sorted_values(self.help_topics):
+            if str(topic.command).strip():
+                records.append(CommandRecord(name=topic.command.strip().lower(), help_text=topic.text or ""))
+        return records
+
+    def has_commands(self) -> bool:
+        return bool(self.command_records())
 
     def help_for(self, command: str) -> HelpTopic | None:
         return self.help_topics.get(_key(command))
@@ -124,16 +170,20 @@ class WorldKnowledge:
         room = None
         if self.room is not None:
             room = {"name": self.room.name, "description": self.room.description, "exits": list(self.room.exits), "itemLines": list(self.room.item_lines)}
-        return {"characterId": character_id, "characterName": character_name, "agentName": agent_name, "loginLines": list(self.login_lines), "helpTopics": [{"command": topic.command, "keyword": topic.keyword, "text": topic.text, "raw": topic.raw, "missing": topic.missing, "topics": [{"keyword": article.keyword, "text": article.text} for article in topic.topics]} for topic in _sorted_values(self.help_topics)], "areas": [{"name": area.name, "author": area.author, "levelRange": area.level_range} for area in _sorted_values(self.areas)], "mobiles": [_being_document(being) for being in _sorted_beings(self.mobiles)], "npcs": [_being_document(being) for being in _sorted_beings(self.npcs)], "players": [_player_document(player) for player in _sorted_values(self.players)], "room": room}
+        commands = [{"name": command.name, "category": command.category, "helpText": command.help_text} for command in (self._commands[key] for key in self._command_order)]
+        return {"characterId": character_id, "characterName": character_name, "agentName": agent_name, "loginLines": list(self.login_lines), "helpTopics": [{"command": topic.command, "keyword": topic.keyword, "text": topic.text, "raw": topic.raw, "missing": topic.missing, "topics": [{"keyword": article.keyword, "text": article.text} for article in topic.topics]} for topic in _sorted_values(self.help_topics)], "commands": commands, "areas": [{"name": area.name, "author": area.author, "levelRange": area.level_range} for area in _sorted_values(self.areas)], "mobiles": [_being_document(being) for being in _sorted_beings(self.mobiles)], "npcs": [_being_document(being) for being in _sorted_beings(self.npcs)], "players": [_player_document(player) for player in _sorted_values(self.players)], "room": room}
 
     @classmethod
     def from_document(cls, document: dict[str, Any]) -> "WorldKnowledge":
-        payload = _snake_tree(document or {})
+        payload = SharedUtil.snake_tree(document or {})
         knowledge = cls()
         knowledge.login_lines = [str(line) for line in payload.get("login_lines") or []]
         for item in payload.get("help_topics") or []:
             if isinstance(item, dict):
                 knowledge.remember_help(HelpTopic(command=str(item.get("command", "")), keyword=str(item.get("keyword", "")), text=str(item.get("text", "")), raw=str(item.get("raw", "")), missing=bool(item.get("missing", False)), topics=[HelpArticle(keyword=str(article.get("keyword", "")), text=str(article.get("text", ""))) for article in item.get("topics") or [] if isinstance(article, dict)]))
+        for item in payload.get("commands") or []:
+            if isinstance(item, dict) and str(item.get("name", "")).strip():
+                knowledge.remember_command(str(item.get("name", "")), category=str(item.get("category", "") or ""), help_text=str(item.get("help_text", "") or ""))
         for item in payload.get("areas") or []:
             if isinstance(item, dict) and str(item.get("name", "")).strip():
                 knowledge.remember_area(AreaRecord(name=str(item.get("name", "")), author=str(item.get("author", "") or ""), level_range=str(item.get("level_range", "") or "")))
@@ -187,12 +237,3 @@ def _names(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
     return [str(item) for item in value]
-
-
-def _snake_tree(value: Any) -> Any:
-    if isinstance(value, dict):
-        converted = SharedUtil.camel_to_snake_case(value)
-        return {key: _snake_tree(item) for key, item in converted.items()}
-    if isinstance(value, list):
-        return [_snake_tree(item) for item in value]
-    return value
