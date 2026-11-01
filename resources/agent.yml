@@ -5,8 +5,9 @@ telnet:
   host: localhost
   port: 6969
   replace_existing: Y
+api:
+  base_url: http://dragon:9080
 knowledge:
-  base_url: http://localhost:8169
   path: /api/v1/agent-knowledge
 ollama:
   base_url: http://localhost:9081

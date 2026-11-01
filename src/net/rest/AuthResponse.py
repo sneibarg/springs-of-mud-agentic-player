@@ -1,22 +1,7 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-
-@dataclass
-class CharacterSummary:
-    id: str
-    name: str
-    level: Optional[int] = None
-
-    @classmethod
-    def from_json(cls, data: Dict[str, Any]) -> "CharacterSummary":
-        if not isinstance(data, dict):
-            raise TypeError("Character entry must be an object")
-        character_id = str(data.get("id", "")).strip()
-        name = str(data.get("name", "")).strip()
-        if not character_id or not name:
-            raise ValueError("Character entry requires id and name")
-        return cls(id=character_id, name=name, level=_character_level(data))
+from net.rest.CharacterSummary import CharacterSummary
 
 
 @dataclass
@@ -57,9 +42,3 @@ class AuthResponse:
             characters.append(CharacterSummary.from_json(entry))
 
         return cls(id=account_id, first_name=str(data.get("firstName", "") or ""), last_name=str(data.get("lastName", "") or ""), account_name=account_name, email_address=str(data.get("emailAddress", "") or ""), player_character_list=characters)
-
-
-def _character_level(data: Dict[str, Any]) -> Optional[int]:
-    if "level" not in data or data.get("level") is None or data.get("level") == "":
-        return None
-    return int(data["level"])

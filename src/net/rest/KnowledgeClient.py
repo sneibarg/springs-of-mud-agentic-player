@@ -7,15 +7,14 @@ class KnowledgeStoreError(Exception):
 
 
 class KnowledgeClient:
-    """Client for the agent world-knowledge API.
-
-    The server side is not in this repository yet. It should implement:
+    """Client for som-server-modulith `GET` and `PUT /api/v1/agent-knowledge/{characterId}`.
 
     - `GET {base}{path}/{characterId}` returns the stored document, or 404 when none exists.
     - `PUT {base}{path}/{characterId}` replaces the stored document and returns it.
-    - Both calls require the login `Authorization` header.
+    - Both calls send the login `Authorization` header when one is present.
     - The body is the camelCase document produced by `WorldKnowledge.to_document`.
       `characterId` in the body matches the path. A PUT replaces the whole snapshot.
+      Mobiles, npcs, and players include `auras`.
     """
 
     def __init__(self, base_url: str, path: str = "/api/v1/agent-knowledge", headers_provider: Optional[Callable[[], dict]] = None, request: Optional[Callable] = None, timeout_s: float = 10.0):

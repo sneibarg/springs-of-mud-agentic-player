@@ -1,15 +1,19 @@
 import json
 import os
 import re
+import socket
 import sys
 import unittest
 from pathlib import Path
+from urllib.parse import urlparse
 
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from agent.AgentCollection import AgentCollection
+from agent.AgentConfig import AgentConfig
 from memory.WorkingMemory import WorkingMemory
+from net.rest.AgentClient import AgentClient
 from play.WorldKnowledge import WorldKnowledge
 from play.WorldReader import parse_room, parse_who
 from tests.live_session import QUIT_PHRASE, LivePlay, require_live_play
@@ -21,7 +25,7 @@ _REVERSE = {"north": "south", "south": "north", "east": "west", "west": "east", 
 _CLOSED_DOOR = re.compile(r"^the .+ is closed\.$", re.IGNORECASE)
 _MOVE_LIMIT = 5
 _OUTPUT = Path(__file__).resolve().parent / "output"
-_AGENTS = Path(__file__).resolve().parents[1] / "resources" / "collections" / "SOMDB.Agents.json"
+_ROOT = Path(__file__).resolve().parents[1]
 
 
 class TestLiveWorkingMemory(unittest.TestCase):
@@ -94,9 +98,12 @@ class TestLiveWorkingMemory(unittest.TestCase):
             play.close()
 
     def test_live_working_memory_players(self):
+        names = _agent_character_names()
+        if names is None:
+            self.skipTest("Modulith is not accepting connections.")
         play = require_live_play(self)
         try:
-            players = parse_who(play.exchange("who"), _agent_character_names(), play.character.name)
+            players = parse_who(play.exchange("who"), names, play.character.name)
             _stand(play)
             observation = _find_player(play, players)
             other = _other_players(observation, play.character.name)[0]
@@ -220,9 +227,34 @@ def _stand(play: LivePlay) -> None:
     play.exchange("stand")
 
 
-def _agent_character_names() -> set[str]:
-    collection = AgentCollection.load(_AGENTS)
+def _agent_character_names() -> set[str] | None:
+    config = AgentConfig.load(_ROOT / "resources" / "agent.yml")
+    host, port = _endpoint(config.api_base_url, 9080)
+    if not _tcp_open(host, port):
+        return None
+    client = AgentClient(config.api_base_url, path=config.agents_path)
+    source = f"{config.api_base_url}{config.agents_path}"
+    collection = AgentCollection.from_documents(client.list(), source)
     return {agent.character_name for agent in collection.agents if agent.character_name}
+
+
+def _endpoint(url: str, default_port: int) -> tuple[str, int]:
+    parsed = urlparse(url if "://" in url else f"http://{url}")
+    return parsed.hostname or "", parsed.port or default_port
+
+
+def _tcp_open(host: str, port: int, timeout_s: float = 0.8) -> bool:
+    if not host or port < 1:
+        return False
+    probe = socket.socket()
+    probe.settimeout(timeout_s)
+    try:
+        probe.connect((host, port))
+        return True
+    except OSError:
+        return False
+    finally:
+        probe.close()
 
 
 def _other_players(observation, self_name: str) -> list:

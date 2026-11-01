@@ -3,8 +3,10 @@ import logging
 from typing import Callable, Optional
 
 from net.rest.AuthClient import AuthClient
-from net.rest.AuthResponse import AuthResponse, CharacterSummary
-from net.rest.ConnectionCatalog import ConnectionCatalog, SavedConnection
+from net.rest.AuthResponse import AuthResponse
+from net.rest.CharacterSummary import CharacterSummary
+from net.rest.ConnectionCatalog import ConnectionCatalog
+from net.rest.SavedConnection import SavedConnection
 from net.telnet.PlayerSession import PlayerSession
 from net.telnet.TelnetClient import TelnetConfig
 

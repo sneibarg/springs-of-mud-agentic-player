@@ -12,7 +12,10 @@ class AgentConfig:
     telnet_host: str
     telnet_port: int
     telnet_replace_existing: str
-    knowledge_base_url: str
+    api_base_url: str
+    agents_path: str
+    prompts_path: str
+    memory_path: str
     knowledge_path: str
     ollama_base_url: str
     ollama_path: str
@@ -35,12 +38,14 @@ class AgentConfig:
 
         auth = _section(raw, "auth")
         telnet = _section(raw, "telnet")
+        api = _section(raw, "api")
         knowledge = _section(raw, "knowledge")
         ollama = _section(raw, "ollama")
         collection = _section(raw, "collection")
         connections = _section(raw, "connections")
         control = _section(raw, "control")
         auth_base_url = str(auth.get("base_url", "http://localhost:8169")).rstrip("/")
+        api_base_url = str(api.get("base_url", "http://dragon:9080")).rstrip("/")
         replace_existing = str(telnet.get("replace_existing", "Y")).strip().upper()[:1] or "Y"
         if replace_existing not in ("Y", "N"):
             raise ValueError("telnet.replace_existing must be Y or N")
@@ -63,7 +68,14 @@ class AgentConfig:
         if not 1 <= control_port <= 65535:
             raise ValueError("control.port must be a TCP port")
 
-        return cls(auth_base_url=auth_base_url, login_path=str(auth.get("login_path", "/api/auth/login")), telnet_host=str(telnet.get("host", "localhost")), telnet_port=int(telnet.get("port", 6969)), telnet_replace_existing=replace_existing, knowledge_base_url=str(knowledge.get("base_url", auth_base_url)).rstrip("/"), knowledge_path=str(knowledge.get("path", "/api/v1/agent-knowledge")), ollama_base_url=str(ollama.get("base_url", "http://localhost:9081")).rstrip("/"), ollama_path=str(ollama.get("path", "/ollama/completions")), database=database, collection_name=collection_name, collection_path=collection_path, connections_path=connections_path, control_host=control_host, control_port=control_port)
+        return cls(auth_base_url=auth_base_url, login_path=str(auth.get("login_path", "/api/auth/login")), telnet_host=str(telnet.get("host", "localhost")), telnet_port=int(telnet.get("port", 6969)), telnet_replace_existing=replace_existing, api_base_url=api_base_url, agents_path=_api_path(api.get("agents_path", "/api/v1/agents")), prompts_path=_api_path(api.get("prompts_path", "/api/v1/agent-prompts")), memory_path=_api_path(api.get("memory_path", "/api/v1/agent-memory")), knowledge_path=_api_path(knowledge.get("path", "/api/v1/agent-knowledge")), ollama_base_url=str(ollama.get("base_url", "http://localhost:9081")).rstrip("/"), ollama_path=str(ollama.get("path", "/ollama/completions")), database=database, collection_name=collection_name, collection_path=collection_path, connections_path=connections_path, control_host=control_host, control_port=control_port)
+
+
+def _api_path(value: object) -> str:
+    path = str(value or "").strip()
+    if not path.startswith("/"):
+        path = f"/{path}"
+    return path
 
 
 def _section(raw: Dict[str, Any], name: str) -> Dict[str, Any]:

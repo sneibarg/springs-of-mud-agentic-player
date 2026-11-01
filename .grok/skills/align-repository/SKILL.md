@@ -21,6 +21,7 @@ The valid target repositories are:
 - `springs-of-mud-ui`
 - `springs-of-mud-server`
 - `springs-of-mud-designer`
+- `som-server-modulith`
 
 ## Find the gaps
 

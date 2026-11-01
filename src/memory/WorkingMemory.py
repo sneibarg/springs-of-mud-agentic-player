@@ -42,7 +42,9 @@ class WorkingMemory:
     """Short-lived memory for one play session.
 
     This is not saved with world knowledge. Call `clear` when the session ends.
-    `write_collection` copies the session into the local Memories collection.
+    `to_collection` is the body for PUT /api/v1/agent-memory/{agentName}.
+    `from_collection` restores that document. `write_collection` copies the
+    session into the local Memories fixture.
     """
 
     def __init__(self):
@@ -233,6 +235,40 @@ class WorkingMemory:
             document[SharedUtil.snake_to_camel(key)] = SharedUtil.camel_keys(value)
         return document
 
+    @classmethod
+    def from_collection(cls, document: dict) -> "WorkingMemory":
+        """Restore one Memories document. `savedAt` and `id` are ignored."""
+        if not isinstance(document, dict):
+            raise TypeError("Working memory document must be an object")
+        payload = _snake_tree(document)
+        if not str(payload.get("agent_name", "") or "").strip():
+            raise ValueError("Working memory collection requires an agent name")
+        memory = cls()
+        for item in payload.get("players") or []:
+            _restore_being(memory, item, "player", agentic=False)
+        for item in payload.get("agentic_players") or []:
+            _restore_being(memory, item, "player", agentic=True)
+        for item in payload.get("mobiles") or []:
+            _restore_being(memory, item, "mobile")
+        for item in payload.get("npcs") or []:
+            _restore_being(memory, item, "npc")
+        for item in payload.get("aggressive_mobiles") or []:
+            if isinstance(item, dict) and str(item.get("name", "")).strip():
+                memory.note_aggressive(str(item.get("name")), room_name=str(item.get("room_name", "") or ""))
+        for item in payload.get("rooms") or []:
+            if isinstance(item, dict) and str(item.get("name", "")).strip():
+                memory.remember_room(str(item.get("name")), description=str(item.get("description", "") or ""), exits=[str(exit_name) for exit_name in item.get("exits") or []])
+        for item in payload.get("commands") or []:
+            if isinstance(item, dict) and str(item.get("name", "")).strip():
+                memory.remember_command(str(item.get("name")), category=str(item.get("category", "") or ""), help_text=str(item.get("help_text", "") or ""))
+        for item in payload.get("considers") or []:
+            _restore_consider(memory, item)
+        for item in payload.get("conversations") or []:
+            if isinstance(item, dict):
+                conversation = Conversation.from_json(item)
+                memory.remember_conversation(conversation.topic, conversation.location, conversation.location_name, participants=list(conversation.participants), interest=conversation.interest)
+        return memory
+
     def write_collection(self, agent_name: str, path: str | None = None) -> str:
         """Upsert this session into the local Memories collection.
 
@@ -313,6 +349,48 @@ def _upsert_agent(documents: list, document: dict) -> list:
     if not replaced:
         updated.append(document)
     return updated
+
+
+def _restore_being(memory: WorkingMemory, item, kind: str, *, agentic: bool = False) -> None:
+    if not isinstance(item, dict):
+        return
+    name = str(item.get("name", "")).strip()
+    if not name:
+        return
+    room_name = str(item.get("room_name", "") or "")
+    auras = item.get("auras")
+    aura_list = [str(aura) for aura in auras] if isinstance(auras, list) else None
+    if kind == "player":
+        memory.remember_player(name, agentic=agentic or bool(item.get("agentic")), room_name=room_name, auras=aura_list)
+    elif kind == "mobile":
+        memory.remember_mobile(name, room_name=room_name, aggressive=bool(item.get("aggressive")), auras=aura_list)
+    else:
+        memory.remember_npc(name, room_name=room_name, auras=aura_list)
+
+
+def _restore_consider(memory: WorkingMemory, item) -> None:
+    if not isinstance(item, dict):
+        return
+    target = str(item.get("target", "")).strip()
+    if not target:
+        return
+    kind = str(item.get("kind", "") or "")
+    agentic = kind == "agentic"
+    if agentic:
+        kind = "player"
+    if kind not in _KINDS:
+        return
+    text = str(item.get("text", "") or "")
+    memory.remember_consider(target, text.splitlines(), kind=kind, agentic=agentic)
+
+
+def _snake_tree(value):
+    if isinstance(value, dict):
+        converted = SharedUtil.camel_to_snake_case(value)
+        return {key: _snake_tree(item) for key, item in converted.items()}
+    if isinstance(value, list):
+        return [_snake_tree(item) for item in value]
+    return value
 
 
 def _copied_auras(record) -> list[str]:

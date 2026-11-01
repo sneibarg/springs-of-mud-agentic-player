@@ -7,7 +7,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from net.AccountSession import AccountSession
 from net.rest.AuthClient import AuthClient
-from net.rest.ConnectionCatalog import ConnectionCatalog, SavedConnection, obfuscate_password
+from net.rest.ConnectionCatalog import ConnectionCatalog
+from net.rest.SavedConnection import SavedConnection, obfuscate_password
 from net.telnet.PlayerSession import PlayerSession
 from net.telnet.TelnetClient import TelnetConfig
 

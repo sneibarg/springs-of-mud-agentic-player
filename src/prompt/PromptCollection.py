@@ -24,13 +24,17 @@ class PromptCollection:
             self._by_name[key] = prompt
 
     @classmethod
+    def from_documents(cls, documents, source: str) -> "PromptCollection":
+        if not isinstance(documents, list):
+            raise ValueError(f"{source} must be a JSON array of prompt documents")
+        return cls([Prompt.from_json(item) for item in documents], source)
+
+    @classmethod
     def load(cls, path: Union[str, Path]) -> "PromptCollection":
         collection_path = Path(path)
         with collection_path.open(encoding="utf-8") as handle:
             payload = json.load(handle)
-        if not isinstance(payload, list):
-            raise ValueError(f"{collection_path} must be a JSON array of prompt documents")
-        return cls([Prompt.from_json(item) for item in payload], str(collection_path))
+        return cls.from_documents(payload, str(collection_path))
 
     def get(self, name: str) -> Prompt:
         prompt = self._by_name.get(name.strip().lower())

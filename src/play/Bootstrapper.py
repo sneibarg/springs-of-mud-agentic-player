@@ -1,168 +1,23 @@
 import json
 import logging
 
-from dataclasses import dataclass
-from typing import Any, Iterable, Optional
+from typing import Iterable, Optional
 
 from memory.WorkingMemory import WorkingMemory
 from net.rest.OllamaClient import OllamaClient, OllamaError
+from play.CategoryLesson import CategoryLesson
 from play.CommandChannel import CommandChannel
+from play.CommandLesson import CommandLesson
+from play.HelpLesson import HelpLesson
 from play.HelpReader import HelpReader, parse_command_names, parse_help
 from play.PlayError import PromptTimeout
 from play.WorldKnowledge import HelpArticle, WorldKnowledge
 from play.WorldReader import WorldReader
-from prompt.Prompt import Prompt, PromptSubmission
+from prompt.Prompt import Prompt
+from prompt.PromptSubmission import PromptSubmission
 
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class CommandLesson:
-    """One `commands` reading and the Ollama exchange that reviewed it.
-
-    `prompt` is the completion body that was sent. `response` is the raw text
-    the model returned. `commands` are the names remembered from the server text.
-    """
-
-    prompt: dict
-    response: str
-    commands: list[str]
-    error: str = ""
-
-    def parsed_commands(self) -> tuple[list[str] | None, str]:
-        parsed, error = _completion_value(self.error, self.response)
-        if error:
-            return None, error
-        names = parsed.get("commands") if isinstance(parsed, dict) else None
-        if not isinstance(names, list) or not all(isinstance(name, str) and name.strip() for name in names):
-            return None, "Ollama completion did not return a commands list"
-        return [name.strip().lower() for name in names], ""
-
-    def to_review(self) -> dict:
-        parsed, parse_error = self.parsed_commands()
-        document = {"prompt": self.prompt, "response": self.response, "commands": list(self.commands), "parsedCommands": parsed}
-        if self.error:
-            document["error"] = self.error
-        if parse_error and not self.error:
-            document["parseError"] = parse_error
-        return document
-
-
-@dataclass
-class CategoryLesson:
-    """One bare `help` index and the Ollama exchange that read its categories.
-
-    `prompt` is the completion body that was sent. `response` is the raw text
-    the model returned. Parsed categories are stored on working memory.
-    """
-
-    prompt: dict
-    response: str
-    error: str = ""
-
-    def parsed_categories(self) -> tuple[list[dict] | None, str]:
-        parsed, error = _completion_value(self.error, self.response)
-        if error:
-            return None, error
-        groups = parsed.get("categories") if isinstance(parsed, dict) else None
-        if not isinstance(groups, list):
-            return None, "Ollama completion did not return categories"
-        cleaned = []
-        seen: set[str] = set()
-        for group in groups:
-            if not isinstance(group, dict):
-                return None, "Ollama completion did not return categories"
-            name = group.get("name")
-            commands = group.get("commands")
-            if not isinstance(name, str) or not name.strip() or not isinstance(commands, list):
-                return None, "Ollama completion did not return categories"
-            names = []
-            for command in commands:
-                if not isinstance(command, str) or not command.strip():
-                    return None, "Ollama completion did not return categories"
-                token = command.strip().lower()
-                if token in seen:
-                    continue
-                seen.add(token)
-                names.append(token)
-            if names:
-                cleaned.append({"name": name.strip().lower(), "commands": names})
-        if not cleaned:
-            return None, "Ollama completion did not return categories"
-        return cleaned, ""
-
-    def to_review(self) -> dict:
-        parsed, parse_error = self.parsed_categories()
-        document = {"prompt": self.prompt, "response": self.response, "parsedCategories": parsed}
-        if self.error:
-            document["error"] = self.error
-        if parse_error and not self.error:
-            document["parseError"] = parse_error
-        return document
-
-
-@dataclass
-class HelpLesson:
-    """One help page and the Ollama exchange that read it.
-
-    `prompt` is the completion body that was sent. `response` is the raw text
-    the model returned. The parsed topics are stored on world knowledge.
-    """
-
-    command: str
-    prompt: dict
-    response: str
-    error: str = ""
-    category_requested: bool = False
-
-    def parsed_help(self) -> tuple[dict | None, str]:
-        parsed, error = _completion_value(self.error, self.response)
-        if error:
-            return None, error
-        if not isinstance(parsed, dict):
-            return None, "Ollama completion did not return a help document"
-        missing = parsed.get("missing")
-        topics = parsed.get("topics")
-        if not isinstance(missing, bool) or not isinstance(topics, list):
-            return None, "Ollama completion did not return help topics"
-        cleaned = []
-        for topic in topics:
-            if not isinstance(topic, dict):
-                return None, "Ollama completion did not return help topics"
-            keyword = topic.get("keyword")
-            text = topic.get("text")
-            if not isinstance(keyword, str) or not keyword.strip() or not isinstance(text, str):
-                return None, "Ollama completion did not return help topics"
-            cleaned.append({"keyword": keyword.strip(), "text": text.strip()})
-        if missing and cleaned:
-            return None, "Ollama completion marked the help missing and also returned topics"
-        if not missing and not cleaned:
-            return None, "Ollama completion returned no help topics"
-        return {"missing": missing, "topics": cleaned}, ""
-
-    def parsed_category(self) -> tuple[str | None, str]:
-        parsed, error = _completion_value(self.error, self.response)
-        if error:
-            return None, error
-        category = parsed.get("category") if isinstance(parsed, dict) else None
-        if not isinstance(category, str) or not category.strip():
-            return None, "Ollama completion did not name a category"
-        return category.strip().lower(), ""
-
-    def to_review(self) -> dict:
-        parsed, parse_error = self.parsed_help()
-        document = {"command": self.command, "prompt": self.prompt, "response": self.response, "parsed": parsed}
-        if self.category_requested:
-            category, category_error = self.parsed_category()
-            document["category"] = category
-            if category_error and not self.error:
-                document["categoryError"] = category_error
-        if self.error:
-            document["error"] = self.error
-        if parse_error and not self.error:
-            document["parseError"] = parse_error
-        return document
 
 
 class Bootstrapper:
@@ -337,18 +192,9 @@ class Bootstrapper:
             self.knowledge.note_player_seen(player.name, observation.room.name)
 
 
-def _completion_value(error: str, response: str) -> tuple[Any, str]:
-    if error:
-        return None, error
-    if not response.strip():
-        return None, "Ollama returned an empty response"
-    try:
-        return json.loads(response), ""
-    except json.JSONDecodeError as exc:
-        return None, f"Ollama completion was not JSON: {exc}"
 
-
-def _commands_submission(prompt: Prompt, command_text: str) -> PromptSubmission: return _submission(prompt, command_text, "{commands}")
+def _commands_submission(prompt: Prompt, command_text: str) -> PromptSubmission:
+    return _submission(prompt, command_text, "{commands}")
 
 
 def _ask_help(prompt: Prompt, client: OllamaClient, command: str, lines: list[str], categories: list[str] | None = None) -> HelpLesson:

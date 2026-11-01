@@ -6,7 +6,8 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from prompt.Prompt import Prompt, PromptSubmission
+from prompt.Prompt import Prompt
+from prompt.PromptSubmission import PromptSubmission
 from prompt.PromptCollection import PromptCollection
 
 

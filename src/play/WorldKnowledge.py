@@ -163,24 +163,30 @@ def _sorted_beings(records: dict[str, BeingRecord]) -> list[BeingRecord]:
     return sorted(records.values(), key=lambda being: (_key(being.room_name), _key(being.name)))
 
 
-def _being_document(being: BeingRecord) -> dict[str, str]:
-    return {"name": being.name, "kind": being.kind, "pose": being.pose, "roomName": being.room_name, "detail": being.detail}
+def _being_document(being: BeingRecord) -> dict[str, Any]:
+    return {"name": being.name, "kind": being.kind, "pose": being.pose, "roomName": being.room_name, "detail": being.detail, "auras": list(being.auras)}
 
 
 def _player_document(player: PlayerRecord) -> dict[str, Any]:
-    return {"name": player.name, "level": player.level, "race": player.race, "characterClass": player.character_class, "title": player.title, "agentic": player.agentic, "selfCharacter": player.self_character, "roomName": player.room_name, "flags": player.flags}
+    return {"name": player.name, "level": player.level, "race": player.race, "characterClass": player.character_class, "title": player.title, "agentic": player.agentic, "selfCharacter": player.self_character, "roomName": player.room_name, "flags": player.flags, "auras": list(player.auras)}
 
 
 def _being_from(item: Any, default_kind: str) -> BeingRecord | None:
     if not isinstance(item, dict) or not str(item.get("name", "")).strip():
         return None
-    return BeingRecord(name=str(item.get("name", "")), kind=str(item.get("kind", default_kind) or default_kind), pose=str(item.get("pose", "") or ""), room_name=str(item.get("room_name", "") or ""), detail=str(item.get("detail", "") or ""))
+    return BeingRecord(name=str(item.get("name", "")), kind=str(item.get("kind", default_kind) or default_kind), pose=str(item.get("pose", "") or ""), room_name=str(item.get("room_name", "") or ""), detail=str(item.get("detail", "") or ""), auras=_names(item.get("auras")))
 
 
 def _player_from(item: Any) -> PlayerRecord | None:
     if not isinstance(item, dict) or not str(item.get("name", "")).strip():
         return None
-    return PlayerRecord(name=str(item.get("name", "")), level=int(item.get("level", 0) or 0), race=str(item.get("race", "") or ""), character_class=str(item.get("character_class", "") or ""), title=str(item.get("title", "") or ""), agentic=bool(item.get("agentic", False)), self_character=bool(item.get("self_character", False)), room_name=str(item.get("room_name", "") or ""), flags=str(item.get("flags", "") or ""))
+    return PlayerRecord(name=str(item.get("name", "")), level=int(item.get("level", 0) or 0), race=str(item.get("race", "") or ""), character_class=str(item.get("character_class", "") or ""), title=str(item.get("title", "") or ""), agentic=bool(item.get("agentic", False)), self_character=bool(item.get("self_character", False)), room_name=str(item.get("room_name", "") or ""), flags=str(item.get("flags", "") or ""), auras=_names(item.get("auras")))
+
+
+def _names(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value]
 
 
 def _snake_tree(value: Any) -> Any:

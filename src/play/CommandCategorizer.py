@@ -1,6 +1,7 @@
 from memory.WorkingMemory import WorkingMemory
 from net.rest.OllamaClient import OllamaClient
-from prompt.Prompt import Prompt, PromptSubmission
+from prompt.Prompt import Prompt
+from prompt.PromptSubmission import PromptSubmission
 
 
 class CommandCategorizer:

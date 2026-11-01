@@ -3,10 +3,10 @@
     "_id": {
       "$oid": "66f0a1b2c3d4e5f607182930"
     },
-    "name": "example-agent",
-    "accountName": "agent-account",
-    "characterName": "Example",
+    "name": "Agent Janky",
+    "accountName": "sneibarg",
+    "characterName": "Janky",
     "enabled": true,
-    "description": "Skeleton agent. Set accountName and characterName to a real account character before connecting."
+    "description": "Scott Neibarger's agentic player."
   }
 ]

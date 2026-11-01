@@ -8,7 +8,8 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from net.rest.ConnectionCatalog import ConnectionCatalog, deobfuscate_password, obfuscate_password
+from net.rest.ConnectionCatalog import ConnectionCatalog
+from net.rest.SavedConnection import deobfuscate_password, obfuscate_password
 
 
 ROOT = Path(__file__).resolve().parents[1]

@@ -8,7 +8,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from pathlib import Path
 
-from play.Bootstrapper import Bootstrapper, CategoryLesson, CommandLesson, HelpLesson
+from play.Bootstrapper import Bootstrapper
+from play.CategoryLesson import CategoryLesson
+from play.CommandLesson import CommandLesson
+from play.HelpLesson import HelpLesson
 from play.CommandChannel import CommandChannel
 from play.PlayError import AuthenticationRejected, CharacterSavePending
 from play.WorldKnowledge import WorldKnowledge

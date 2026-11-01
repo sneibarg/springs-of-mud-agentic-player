@@ -18,11 +18,14 @@ class AgentCollection:
         self.source = source
 
     @classmethod
+    def from_documents(cls, documents, source: str) -> "AgentCollection":
+        if not isinstance(documents, list):
+            raise ValueError(f"{source} must be a JSON array of agent documents")
+        return cls([Agent.from_json(item) for item in documents], source)
+
+    @classmethod
     def load(cls, path: Union[str, Path]) -> "AgentCollection":
         collection_path = Path(path)
         with collection_path.open(encoding="utf-8") as handle:
             payload = json.load(handle)
-        if not isinstance(payload, list):
-            raise ValueError(f"{collection_path} must be a JSON array of agent documents")
-        agents = [Agent.from_json(item) for item in payload]
-        return cls(agents, str(collection_path))
+        return cls.from_documents(payload, str(collection_path))

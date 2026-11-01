@@ -4,29 +4,31 @@
 
 This repository is the Python runtime for Springs of MUD agentic player characters. An agent is a player that logs into the game server and plays a character on its own.
 
-Game identity and persona live in the `Agents` collection. The long-term source is the `Agents` collection in the `SOMDB` MongoDB database. Until that database is wired in, load the same documents from `resources/collections/SOMDB.Agents.json`.
+Game identity and persona live in the `Agents` collection. The runtime reads agents with `GET /api/v1/agents` on som-server-modulith. `resources/collections/SOMDB.Agents.json` remains the unit-test fixture.
 
 Add Python for the runtime: collection loading, auth, the telnet session, and later the decision loop. Put ordinary agent tuning in the collection document.
 
-The companion server is `springs-of-mud-server`. The login and telnet behavior follows `springs-of-mud-ui/src/net`.
+The companion server is `springs-of-mud-server`. The login and telnet behavior follows `springs-of-mud-ui/src/net`. Agent, prompt, memory, and knowledge documents are served by som-server-modulith.
 
 ## Architecture Map
 
-- `src/main.py` loads `resources/agent.yml`, reads the Agents snapshot, and listens on the local control socket. The agent starts idle. `play` bootstraps game knowledge once.
+- `src/main.py` loads `resources/agent.yml`, reads agents with `GET /api/v1/agents`, and listens on the local control socket. The agent starts idle. `play` bootstraps game knowledge once.
 - `src/agent` owns `Agent`, `AgentCollection`, `AgentRegistry`, and `AgentConfig`.
 - `src/control` owns `PlayerControl` and `GameplayOutput`. `handle` accepts `idle`, `play`, `memory`, `output`, `connect`, `list`, and `logon`.
 - `src/cli` is the operator invoker. `python -m cli` sends one known command. `src/net/local/ControlServer` accepts it on `127.0.0.1`. The transport is one raw TCP socket.
 - `src/net/AccountSession` connects a saved account and logs on with one character from that login.
 - `src/play` owns the first-login `Bootstrapper`, `CommandChannel`, help and world readers, and `WorldKnowledge`.
 - `src/memory` owns short-lived `WorkingMemory` for the current session: players, agentic players, mobiles, NPCs, rooms, `ConsiderOpponent` records, conversations, and aggressive mobiles. It is not part of the knowledge document.
-- `src/prompt` loads `SOMDB.Prompts` and fills a prompt's tokens before that text is submitted to som-nlp-service.
-- `src/net/rest` retrieves the auth token, saves world knowledge, and calls the Ollama service. `AuthClient` posts to `/api/auth/login` and stores the `Authorization` response header, matching `springs-of-mud-ui`. `KnowledgeClient` puts the knowledge snapshot to the agent-knowledge API. `OllamaClient` posts to `/ollama/completions`.
+- `src/prompt` fills a prompt's tokens before that text is submitted to som-nlp-service. A caller that needs a prompt loads it with `GET /api/v1/agent-prompts/{name}`.
+- `src/net/rest` retrieves the auth token, loads agents and prompts, loads and saves working memory, saves world knowledge, and calls the Ollama service. The modulith origin is `api.base_url`. `AuthClient` posts to `/api/auth/login` and stores the `Authorization` response header, matching `springs-of-mud-ui`. `AgentClient` gets `/api/v1/agents`. `PromptClient` gets `/api/v1/agent-prompts`. `MemoryClient` gets and puts `/api/v1/agent-memory/{agentName}`. `KnowledgeClient` puts the knowledge snapshot to `/api/v1/agent-knowledge/{characterId}`. `OllamaClient` posts to `/ollama/completions`.
 - `src/net/telnet` owns the telnet socket client and `PlayerSession`, which sends the server `logon` line.
 - `src/util` holds small shared helpers: camelCase conversion and reading or writing a JSON collection file.
-- `resources/agent.yml` holds auth URL, telnet host and port, the local control address, and the collection location.
-- `resources/collections/SOMDB.Agents.json` is the current `SOMDB.Agents` snapshot. `SOMDB.Memories.json` is the local working-memory snapshot, one document per agent.
+- `resources/agent.yml` holds the auth URL, telnet host and port, `api.base_url`, the local control address, and the collection location.
+- `resources/collections/SOMDB.Agents.json` is the unit-test fixture for `SOMDB.Agents`. `SOMDB.Prompts.json` is the unit-test fixture for prompts. `SOMDB.Memories.json` is the local working-memory fixture, one document per agent.
 
 ## Collection Data
+
+The JSON files under `resources/collections` remain fixtures. Live agent, prompt, and memory documents come from `GET /api/v1/agents`, `GET /api/v1/agent-prompts`, and `GET /api/v1/agent-memory/{agentName}`.
 
 `SOMDB.Agents.json` is a JSON array of Mongo-style documents. Keep these names and shapes stable so the file can move into the `SOMDB` database collection `Agents` later:
 
@@ -83,15 +85,15 @@ A normal reply ends on a playing prompt such as `<20hp 100m 100mv>`. The next co
 
 ## World Knowledge API
 
-After bootstrap, `KnowledgeClient` saves the snapshot. The HTTP server for this API is not in this repository yet. Implement it against this client.
+After bootstrap, `KnowledgeClient` saves the snapshot on som-server-modulith, port `9080`. The origin is `api.base_url` in `resources/agent.yml`. The default is `http://dragon:9080`.
 
-- `PUT {knowledge.base_url}{knowledge.path}/{characterId}` replaces one character's snapshot.
+- `PUT {api.base_url}{knowledge.path}/{characterId}` replaces one character's snapshot.
 - `GET` the same path returns that document. `404` means nothing is stored.
 - Send the login `Authorization` header. Leave the token out of the body and out of logs.
-- The body is camelCase JSON from `WorldKnowledge.to_document`: `characterId`, `characterName`, `agentName`, `loginLines`, `helpTopics`, `areas`, `mobiles`, `npcs`, `players`, and `room`.
+- The body is camelCase JSON from `WorldKnowledge.to_document`: `characterId`, `characterName`, `agentName`, `loginLines`, `helpTopics`, `areas`, `mobiles`, `npcs`, `players`, and `room`. Mobiles, npcs, and players include `auras`.
 - `characterId` in the body matches the path. A PUT replaces the whole snapshot.
 
-`resources/agent.yml` `knowledge` holds the base URL and path. The default path is `/api/v1/agent-knowledge`. A failed save is reported and the telnet session continues.
+`resources/agent.yml` `knowledge.path` is the path. The default is `/api/v1/agent-knowledge`. A failed save is reported and the telnet session continues.
 
 ## Operator Control
 
@@ -121,10 +123,11 @@ The process starts in `idle` and answers `idle`, `play`, `memory`, `output`, `co
 - `absorb_world` copies the current world snapshot, including the current room, and keeps rooms already remembered.
 - `write_review(path)` writes `to_review()` as indented JSON: players, agentic players, mobiles, npcs, aggressive mobiles, rooms, commands, considered opponents, and conversations. The same consider stored under a target and a subject is written once.
 - `write_collection(agent_name)` upserts that snapshot into `resources/collections/SOMDB.Memories.json`. The document's `agentName` is the lookup field. A later dump for the same agent, ignoring case, replaces that document and leaves other agents in place. Pass a path to write a different collection file. The `memory` command still writes the review file and does not call this dump.
+- `from_collection` restores a memory document through the `remember_*` methods. It ignores `savedAt` and `id`. A blank `agentName` raises. The runtime loads the live snapshot with `GET /api/v1/agent-memory/{agentName}`. A `404` leaves the session empty. After play, the runtime saves the current `to_collection` with `PUT` on that path. An idle exit that never played leaves the stored document in place. `write_collection` remains the fixture writer.
 
 ## Prompts
 
-`SOMDB.Prompts.json` holds extractor prompts for model `gpt-oss:20b`. `score` asks for one or more intent tokens, such as `expToLevel` or `armorClass`. `Prompt.tokenize(score_text, *intents)` replaces `{intent}`, `{response}`, and `{score}` and narrows `jsonSchema` to those facts.
+`SOMDB.Prompts.json` holds extractor prompts for model `gpt-oss:20b` and remains the unit-test fixture. A caller that needs a prompt loads it with `GET /api/v1/agent-prompts/{name}`. `bootstrap()` does not call those prompts. `score` asks for one or more intent tokens, such as `expToLevel` or `armorClass`. `Prompt.tokenize(score_text, *intents)` replaces `{intent}`, `{response}`, and `{score}` and narrows `jsonSchema` to those facts.
 
 `PromptSubmission.to_request()` is the body for som-nlp-service `POST /ollama/completions`: `model`, `system`, `user`, and `jsonSchema`. A blank user is rejected with the service message and is not sent. `OllamaClient.complete` returns the `text` field. When the request included a schema, `read_completion` parses that text as JSON. `resources/agent.yml` `ollama.base_url` is `http://localhost:9081`.
 
@@ -140,27 +143,38 @@ The process starts in `idle` and answers `idle`, `play`, `memory`, `output`, `co
 
 ## Testing
 
-Use `unittest`. Tests add `src` to `sys.path`. `tests.test_local_control` binds `127.0.0.1` on an ephemeral port. `tests.test_live_logon` connects profile `SpringsOfMUD` and logs on its lowest-level character when that profile's auth service and telnet port are accepting connections. It skips when they are not. `tests.test_live_working_memory` uses that same logon. `test_live_working_memory_mobiles` records a mobile from the live room and a `ConsiderOpponent`. `test_live_working_memory_players` records another player from `who` and `look`, including that player's auras, room, and `ConsiderOpponent`. `test_live_working_memory_rooms` records two rooms after one move. Each test quits before it returns, and each skips when auth or telnet is closed. `tests.test_live_command_bootstrap` uses that same logon. It sends bare `help` and asks the `categories` prompt, then sends `commands` and asks the `commands` prompt, then sends `help` for each command in that list and for any help-index command the list omitted. Each page goes to the help prompt. A command the index did not categorize asks that prompt for a category as well. It writes `tests/output/test_live_command_bootstrap.json` with every Ollama prompt and raw response, then quits. `test_live_help_categories` sends only bare `help`, asks the `categories` prompt, writes `tests/output/test_live_help_categories.json` with that prompt and raw response, and quits. It does not send `commands` or read individual help pages. Both skip when auth, telnet, or Ollama is closed. The other tests do not open a telnet session or call a live auth, knowledge, or model service.
+Use `unittest`. Tests add `src` to `sys.path`. `tests.TestControlServer` binds `127.0.0.1` on an ephemeral port. `tests.test_live_logon` connects profile `SpringsOfMUD` and logs on its lowest-level character when that profile's auth service and telnet port are accepting connections. It skips when they are not. `tests.test_live_working_memory` uses that same logon. `test_live_working_memory_mobiles` records a mobile from the live room and a `ConsiderOpponent`. `test_live_working_memory_players` records another player from `who` and `look`, including that player's auras, room, and `ConsiderOpponent`, and reads agent character names with `GET /api/v1/agents`. `test_live_working_memory_rooms` records two rooms after one move. Each test quits before it returns, and each skips when auth or telnet is closed. `test_live_working_memory_players` also skips when som-server-modulith is closed. `tests.test_live_command_bootstrap` uses that same logon. It sends bare `help` and asks the `categories` prompt, then sends `commands` and asks the `commands` prompt, then sends `help` for each command in that list and for any help-index command the list omitted. Each page goes to the help prompt. A command the index did not categorize asks that prompt for a category as well. It writes `tests/output/test_live_command_bootstrap.json` with every Ollama prompt and raw response, then quits. `test_live_help_categories` sends only bare `help`, asks the `categories` prompt, writes `tests/output/test_live_help_categories.json` with that prompt and raw response, and quits. It does not send `commands` or read individual help pages. Both load prompts with `GET /api/v1/agent-prompts`. Both skip when auth, telnet, Ollama, or som-server-modulith is closed. The other tests do not open a telnet session or call a live auth, agent, prompt, memory, knowledge, or model service.
 
 Run focused tests for the area you changed:
 
 ```powershell
 python -m unittest tests.test_agent_collection
+python -m unittest tests.test_agent_client
 python -m unittest tests.test_auth_client
 python -m unittest tests.test_connection_catalog
 python -m unittest tests.test_account_session
 python -m unittest tests.test_player_session
-python -m unittest tests.test_world_reader
+python -m unittest tests.TestHelpReader
+python -m unittest tests.TestWorldReader
 python -m unittest tests.test_bootstrapper
 python -m unittest tests.test_command_categorizer
 python -m unittest tests.test_command_channel
 python -m unittest tests.test_knowledge_client
-python -m unittest tests.test_working_memory
+python -m unittest tests.TestConsiderMemory
+python -m unittest tests.TestAggressiveMobiles
+python -m unittest tests.TestCommands
+python -m unittest tests.TestAuras
+python -m unittest tests.TestAbsorbWorld
+python -m unittest tests.TestConversations
+python -m unittest tests.TestMemoryReview
+python -m unittest tests.test_memory_client
 python -m unittest tests.test_prompt_tokenizer
+python -m unittest tests.test_prompt_client
 python -m unittest tests.test_ollama_client
 python -m unittest tests.test_player_control
 python -m unittest tests.test_gameplay_output
-python -m unittest tests.test_local_control
+python -m unittest tests.TestControlProtocol
+python -m unittest tests.TestControlServer
 python -m unittest tests.test_live_logon
 python -m unittest tests.test_live_working_memory
 python -m unittest tests.test_live_command_bootstrap.TestLiveCommandBootstrap.test_live_help_categories
@@ -172,8 +186,8 @@ When changing collection documents, auth parsing, the logon line, or first-login
 
 ## Change Discipline
 
-- Keep persona, account name, character name, and enabled state in `SOMDB.Agents.json`.
+- Keep persona, account name, character name, and enabled state on the agent document served by `GET /api/v1/agents`. `SOMDB.Agents.json` remains the unit-test fixture.
 - Keep the login request and the telnet `logon` line compatible with `springs-of-mud-ui` and `springs-of-mud-server`.
-- Do not add a live MongoDB client until a task replaces the JSON snapshot. The database name `SOMDB` and collection name `Agents` stay in config so that cutover is explicit.
+- The cutover from the JSON snapshots is these REST clients. A live Mongo client is still out of scope. The database name `SOMDB` and collection name `Agents` stay in config.
 - Do not commit passwords, tokens, or local `.env` files.
 - Avoid broad refactors of the telnet byte parser unless a test covers the negotiation change.

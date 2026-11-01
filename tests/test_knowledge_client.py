@@ -6,7 +6,7 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from net.rest.KnowledgeClient import KnowledgeClient, KnowledgeStoreError
-from play.WorldKnowledge import AreaRecord, HelpTopic, PlayerRecord, RoomSnapshot, WorldKnowledge
+from play.WorldKnowledge import AreaRecord, BeingRecord, HelpTopic, PlayerRecord, RoomSnapshot, WorldKnowledge
 
 
 class _Response:
@@ -58,7 +58,9 @@ class TestKnowledgeClient(unittest.TestCase):
         knowledge.login_lines = ["Welcome to the server!"]
         knowledge.remember_help(HelpTopic(command="look", keyword="LOOK", text="Look around.", raw="LOOK\nLook around."))
         knowledge.remember_area(AreaRecord(name="Temple of Mota", author="Romy", level_range="1-5"))
-        knowledge.remember_player(PlayerRecord(name="Example", level=1, race="human", character_class="Mag", title="the agent", agentic=True, self_character=True, room_name="Temple of Mota"))
+        knowledge.remember_mobile(BeingRecord(name="a healer", kind="mobile", pose="here", room_name="Temple of Mota", auras=["White Aura"]))
+        knowledge.remember_npc(BeingRecord(name="Hassan", kind="npc", pose="standing", room_name="Temple of Mota", auras=["Golden Aura"]))
+        knowledge.remember_player(PlayerRecord(name="Example", level=1, race="human", character_class="Mag", title="the agent", agentic=True, self_character=True, room_name="Temple of Mota", auras=["Red Aura"]))
         knowledge.room = RoomSnapshot(name="Temple of Mota", description="A quiet temple.", exits=["north"], item_lines=["a fountain"])
         document = knowledge.to_document(character_id="char-1", character_name="Example", agent_name="example-agent")
 
@@ -73,6 +75,10 @@ class TestKnowledgeClient(unittest.TestCase):
         self.assertTrue(restored.player_named("Example").agentic)
         self.assertEqual(restored.room.exits, ["north"])
         self.assertEqual(restored.room.item_lines, ["a fountain"])
+        self.assertEqual(document["mobiles"][0]["auras"], ["White Aura"])
+        self.assertEqual(document["npcs"][0]["auras"], ["Golden Aura"])
+        self.assertEqual(document["players"][0]["auras"], ["Red Aura"])
+        self.assertEqual(restored.player_named("Example").auras, ["Red Aura"])
 
 
 if __name__ == "__main__":

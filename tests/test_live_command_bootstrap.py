@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from agent.AgentConfig import AgentConfig
 from net.rest.OllamaClient import OllamaClient
+from net.rest.PromptClient import PromptClient
 from play.Bootstrapper import Bootstrapper
 from prompt.PromptCollection import PromptCollection
 from tests.live_session import QUIT_PHRASE, require_live_play
@@ -30,12 +31,14 @@ class TestLiveCommandBootstrap(unittest.TestCase):
         base_url = _ollama_url()
         if not base_url:
             self.skipTest("Ollama is not accepting connections.")
+        prompts = _prompt_collection()
+        if prompts is None:
+            self.skipTest("Modulith is not accepting connections.")
         play = require_live_play(self)
         if self.review_path.is_file():
             self.review_path.unlink()
         try:
             config = AgentConfig.load(_ROOT / "resources" / "agent.yml")
-            prompts = PromptCollection.load(_ROOT / "resources" / "collections" / "SOMDB.Prompts.json")
             client = OllamaClient(base_url, path=config.ollama_path)
             bootstrapper = Bootstrapper(play.account.session, [], play.character.name, channel=play.channel)
             categories = bootstrapper.learn_categories(prompts.get("categories"), client)
@@ -129,12 +132,15 @@ class TestLiveCommandBootstrap(unittest.TestCase):
         base_url = _ollama_url()
         if not base_url:
             self.skipTest("Ollama is not accepting connections.")
+        prompts = _prompt_collection()
+        if prompts is None:
+            self.skipTest("Modulith is not accepting connections.")
         play = require_live_play(self)
         if self.review_path.is_file():
             self.review_path.unlink()
         try:
             config = AgentConfig.load(_ROOT / "resources" / "agent.yml")
-            prompt = PromptCollection.load(_ROOT / "resources" / "collections" / "SOMDB.Prompts.json").get("categories")
+            prompt = prompts.get("categories")
             bootstrapper = Bootstrapper(play.account.session, [], play.character.name, channel=play.channel)
             lesson = bootstrapper.learn_categories(prompt, OllamaClient(base_url, path=config.ollama_path))
             self.review_path.write_text(json.dumps(lesson.to_review(), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -169,6 +175,16 @@ class TestLiveCommandBootstrap(unittest.TestCase):
         self.assertTrue(self.review_path.is_file())
         self.assertGreater(self.review_path.stat().st_size, 0)
         return self.review_path
+
+
+def _prompt_collection() -> PromptCollection | None:
+    config = AgentConfig.load(_ROOT / "resources" / "agent.yml")
+    host, port = _endpoint(config.api_base_url, 9080)
+    if not _tcp_open(host, port):
+        return None
+    client = PromptClient(config.api_base_url, path=config.prompts_path)
+    source = f"{config.api_base_url}{config.prompts_path}"
+    return PromptCollection.from_documents(client.list(), source)
 
 
 def _ollama_url() -> str:
