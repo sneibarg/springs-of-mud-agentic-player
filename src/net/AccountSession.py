@@ -17,16 +17,20 @@ logger = logging.getLogger(__name__)
 class AccountSession:
     """Connect a saved account, then log on as one of its characters.
 
-    The password is deobfuscated only for the login call. Logon refuses a
-    name that was not in the login character list.
+    The auth URL and login path come from the caller. Production passes
+    `auth.base_url` and `auth.login_path` from `resources/agent.yml`.
+    The saved connection supplies the account name, password, and an
+    optional telnet host. It does not choose the auth service. The password
+    is deobfuscated only for the login call. Logon refuses a name that was
+    not in the login character list.
     """
 
-    def __init__(self, catalog: ConnectionCatalog, *, auth_base_url: str = "http://localhost:8169", login_path: str = "/api/auth/login", telnet_host: str = "localhost", telnet_port: int = 6969, auth_client_factory: Optional[Callable[[str], AuthClient]] = None, session_factory: Optional[Callable[[str, int], PlayerSession]] = None):
+    def __init__(self, catalog: ConnectionCatalog, *, auth_base_url: str, login_path: str, telnet_host: str, telnet_port: int, auth_client_factory: Optional[Callable[[str], AuthClient]] = None, session_factory: Optional[Callable[[str, int], PlayerSession]] = None):
         self.catalog = catalog
-        self.auth_base_url = auth_base_url.rstrip("/")
-        self.login_path = login_path
-        self.telnet_host = telnet_host
-        self.telnet_port = telnet_port
+        self.auth_base_url = _required_text(auth_base_url, "auth_base_url").rstrip("/")
+        self.login_path = _required_text(login_path, "login_path")
+        self.telnet_host = _required_text(telnet_host, "telnet_host")
+        self.telnet_port = _required_port(telnet_port)
         self._auth_client_factory = auth_client_factory or self._default_auth_client
         self._session_factory = session_factory or self._default_session
         self.connection: Optional[SavedConnection] = None
@@ -50,9 +54,8 @@ class AccountSession:
         password = connection.login_password()
         if not connection.account_name or not password:
             return "Account name and password are required."
-        base_url = connection.server_url or self.auth_base_url
         try:
-            client = self._auth_client_factory(base_url)
+            client = self._auth_client_factory(self.auth_base_url)
             auth = client.login(connection.account_name, password)
         except Exception as exc:
             logger.warning("Connect failed: %s", exc.__class__.__name__)
@@ -118,6 +121,23 @@ class AccountSession:
 
     def _default_session(self, host: str, port: int) -> PlayerSession:
         return PlayerSession(TelnetConfig(host=host, port=port))
+
+
+def _required_text(value: str, name: str) -> str:
+    cleaned = str(value or "").strip()
+    if not cleaned:
+        raise ValueError(f"{name} is required")
+    return cleaned
+
+
+def _required_port(value: int) -> int:
+    try:
+        port = int(value)
+    except (TypeError, ValueError):
+        raise ValueError("telnet_port is required") from None
+    if not 1 <= port <= 65535:
+        raise ValueError("telnet_port is required")
+    return port
 
 
 def _available_character(auth: AuthResponse, name: str) -> Optional[CharacterSummary]:

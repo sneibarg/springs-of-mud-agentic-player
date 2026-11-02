@@ -34,7 +34,8 @@ class TestAgentCollection(unittest.TestCase):
         self.assertEqual(config.database, "SOMDB")
         self.assertEqual(config.collection_name, "Agents")
         self.assertEqual(config.collection_path, ROOT / "resources" / "collections" / "SOMDB.Agents.json")
-        self.assertEqual(config.auth_base_url, "http://localhost:8169")
+        self.assertEqual(config.auth_base_url, "http://dragon:8169")
+        self.assertEqual(config.login_path, "/api/auth/login")
         self.assertEqual(config.telnet_port, 6969)
         self.assertEqual(config.telnet_replace_existing, "Y")
         self.assertEqual(config.api_base_url, "http://dragon:9080")
@@ -47,6 +48,7 @@ class TestAgentCollection(unittest.TestCase):
         self.assertEqual(config.connections_path, ROOT / "resources" / "connections.json")
         self.assertEqual(config.control_host, "127.0.0.1")
         self.assertEqual(config.control_port, 9711)
+        self.assertTrue(config.initial_bootstrap)
 
     def test_duplicate_name_is_rejected(self):
         document = {"_id": {"$oid": "66f0a1b2c3d4e5f607182931"}, "name": "Guide", "accountName": "account", "characterName": "Guide"}
@@ -70,15 +72,29 @@ class TestAgentCollection(unittest.TestCase):
     def test_control_host_must_be_loopback(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "agent.yml"
-            path.write_text("control:\n  host: 10.0.0.1\n  port: 9711\n", encoding="utf-8")
+            path.write_text("auth:\n  base_url: http://dragon:8169\n  login_path: /api/auth/login\ncontrol:\n  host: 10.0.0.1\n  port: 9711\n", encoding="utf-8")
             with self.assertRaises(ValueError) as caught:
                 AgentConfig.load(str(path))
             self.assertEqual(str(caught.exception), "Control host must be localhost")
 
-            path.write_text("control:\n  host: localhost\n  port: 0\n", encoding="utf-8")
+            path.write_text("auth:\n  base_url: http://dragon:8169\n  login_path: /api/auth/login\ncontrol:\n  host: localhost\n  port: 0\n", encoding="utf-8")
             with self.assertRaises(ValueError) as caught:
                 AgentConfig.load(str(path))
             self.assertEqual(str(caught.exception), "control.port must be a TCP port")
+
+    def test_initial_bootstrap_defaults_off_and_rejects_a_non_boolean(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "agent.yml"
+            path.write_text("auth:\n  base_url: http://dragon:8169\n  login_path: /api/auth/login\ncontrol:\n  host: 127.0.0.1\n  port: 9711\n", encoding="utf-8")
+            self.assertFalse(AgentConfig.load(str(path)).initial_bootstrap)
+            path.write_text("control:\n  host: 127.0.0.1\n  port: 9711\n", encoding="utf-8")
+            with self.assertRaises(ValueError) as missing:
+                AgentConfig.load(str(path))
+            self.assertEqual(str(missing.exception), "auth.base_url is required")
+            path.write_text("auth:\n  base_url: http://dragon:8169\n  login_path: /api/auth/login\nbootstrap:\n  initial: \"no\"\n", encoding="utf-8")
+            with self.assertRaises(ValueError) as caught:
+                AgentConfig.load(str(path))
+            self.assertEqual(str(caught.exception), "bootstrap.initial must be a boolean")
 
 
 if __name__ == "__main__":

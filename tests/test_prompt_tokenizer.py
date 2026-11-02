@@ -28,6 +28,8 @@ class TestPromptTokenizer(unittest.TestCase):
         self.assertIn("{intent}", self.score.system)
         self.assertIn("{response}", self.score.system)
         self.assertEqual(self.score.user, "{score}")
+        self.assertEqual(PromptCollection.load(PROMPTS).get("items").user, "{look}")
+        self.assertEqual(PromptCollection.load(PROMPTS).get("commands").user, "{commands}")
 
     def test_experience_intent_is_filled_before_submission(self):
         submission = self.score.tokenize(SCORE, "expToLevel")

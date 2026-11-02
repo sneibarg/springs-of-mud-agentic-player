@@ -10,9 +10,15 @@ class AuthClient:
     The auth token is the Authorization response header from POST /api/auth/login.
     """
 
-    def __init__(self, base_url: str = "http://localhost:8169", login_path: str = "/api/auth/login", post: Optional[Callable] = None, timeout_s: float = 10.0):
-        self.base_url = base_url.rstrip("/")
-        self.login_path = login_path if login_path.startswith("/") else f"/{login_path}"
+    def __init__(self, base_url: str, login_path: str, post: Optional[Callable] = None, timeout_s: float = 10.0):
+        cleaned_base = str(base_url or "").strip().rstrip("/")
+        cleaned_path = str(login_path or "").strip()
+        if not cleaned_base:
+            raise ValueError("Auth base URL is required")
+        if not cleaned_path:
+            raise ValueError("Auth login path is required")
+        self.base_url = cleaned_base
+        self.login_path = cleaned_path if cleaned_path.startswith("/") else f"/{cleaned_path}"
         self.auth_endpoint = urljoin(f"{self.base_url}/", self.login_path.lstrip("/"))
         self._post = post or _default_post
         self.timeout_s = timeout_s
@@ -20,6 +26,7 @@ class AuthClient:
         self.auth_data: Optional[AuthResponse] = None
 
     def login(self, account_name: str, password: str) -> AuthResponse:
+        print(f"Auth endpoint: {self.auth_endpoint}")
         response = self._post(self.auth_endpoint, json={"accountName": account_name, "password": password}, timeout=self.timeout_s)
         response.raise_for_status()
         self.auth_data = AuthResponse.from_json(response.json())

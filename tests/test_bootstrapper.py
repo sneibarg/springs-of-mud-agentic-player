@@ -95,6 +95,20 @@ class TestBootstrapper(unittest.TestCase):
         self.assertIn("temple of mota|marcus", knowledge.npcs)
         self.assertEqual(knowledge.npcs["temple of mota|marcus"].kind, "npc")
 
+    def test_login_room_is_sent_as_the_user_prompt(self):
+        look = ["By the Temple Altar", "    A pit for sacrifices is in front of the altar.", "A healer is here."]
+        client = _ScriptedClient(opening=["Welcome to the server!", "<10hp 10m 10mv>"], replies={"commands": ["look          help          areas         who           "], "help look": ["LOOK", "Look around."], "help help": ["HELP", "Read a help page."], "help areas": ["AREAS", "List the areas."], "help who": ["WHO", "See who is playing."], "areas": [f"{'[1-5] Romy: Temple of Mota':<39}"], "who": ["[1    human    Mag] Example the agent", "Players found: 1"], "look": look})
+        clock = _Clock()
+        channel = CommandChannel(client, timeout_s=1.0, clock=clock, sleep=clock.sleep)
+        room = "\n".join(look)
+        prompts = {"items": Prompt(name="items", model="gpt-oss:20b", system="Classify the items.", user="By the Temple Altar is a sample, not the live room.", json_schema={"type": "object", "required": ["items"]}, tokens={}), "look": Prompt(name="look", model="gpt-oss:20b", system="Read the room.", user="{look}", json_schema={"type": "object"}, tokens={})}
+        model = _Model('{"items": [{"name": "pit", "line": "A pit for sacrifices is in front of the altar.", "itemType": "container"}]}')
+
+        Bootstrapper(None, ["Example"], "Example", channel=channel, prompts=prompts, ollama=model).bootstrap()
+
+        self.assertEqual([body["user"] for body in model.bodies], [room, room])
+        self.assertNotIn("sample", model.bodies[0]["user"])
+
     def test_learn_commands_keeps_the_prompt_and_the_model_response(self):
         columns = "look        help        areas       "
         client = _ScriptedClient(opening=[], replies={"commands": [columns]})
@@ -236,6 +250,18 @@ class TestBootstrapper(unittest.TestCase):
         self.assertEqual(prompt.model, "gpt-oss:20b")
         self.assertIn("36 characters", prompt.system)
         self.assertIn("categories", prompt.json_schema["required"])
+
+    def test_items_prompt_classifies_interactable_room_objects(self):
+        prompt = PromptCollection.load(Path(__file__).resolve().parents[1] / "resources" / "collections" / "SOMDB.Prompts.json").get("items")
+        item = prompt.json_schema["properties"]["items"]["items"]
+        self.assertEqual(prompt.model, "gpt-oss:20b")
+        self.assertEqual(prompt.json_schema["required"], ["items"])
+        self.assertEqual(item["required"], ["name", "line", "itemType"])
+        self.assertIn("container", item["properties"]["itemType"]["enum"])
+        self.assertIn("pit", prompt.system)
+        self.assertEqual(prompt.user, "{look}")
+        room = "By the Temple Altar\n    A pit for sacrifices is in front of the altar."
+        self.assertEqual(prompt.for_text(room).user, room)
 
     def test_unparsed_categories_stay_in_the_review(self):
         lesson = CategoryLesson(prompt={"system": "Read the index.", "user": "MOVEMENT"}, response="not json")

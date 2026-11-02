@@ -138,6 +138,17 @@ class WorldKnowledge:
     def has_commands(self) -> bool:
         return bool(self.command_records())
 
+    @staticmethod
+    def summary(knowledge: "WorldKnowledge") -> str:
+        """Count every stored section, including the items in the current room."""
+        room = knowledge.room
+        items = len(room.item_lines) if room is not None else 0
+        room_name = room.name.strip() if room is not None and room.name else ""
+        text = f"Knowledge: {len(knowledge.help_topics)} help, {len(knowledge._commands)} commands, {len(knowledge.areas)} areas, {len(knowledge.mobiles)} mobiles, {len(knowledge.npcs)} npcs, {len(knowledge.players)} players, {items} items."
+        if room_name:
+            return f"{text}\nCurrent room: {room_name}"
+        return text
+
     def help_for(self, command: str) -> HelpTopic | None:
         return self.help_topics.get(_key(command))
 

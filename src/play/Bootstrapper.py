@@ -27,7 +27,7 @@ class Bootstrapper:
     index does not list is categorized from its own help page.
     """
 
-    def __init__(self, session, agent_character_names: Iterable[str], self_character: str, channel: Optional[CommandChannel] = None, help_reader: Optional[HelpReader] = None, world_reader: Optional[WorldReader] = None, memory: Optional[WorkingMemory] = None, replace_existing: str = "Y", on_commands: Optional[Callable[[WorldKnowledge], None]] = None):
+    def __init__(self, session, agent_character_names: Iterable[str], self_character: str, channel: Optional[CommandChannel] = None, help_reader: Optional[HelpReader] = None, world_reader: Optional[WorldReader] = None, memory: Optional[WorkingMemory] = None, replace_existing: str = "Y", on_commands: Optional[Callable[[WorldKnowledge], None]] = None, prompts: Optional[dict] = None, ollama: Optional[OllamaClient] = None):
         self.channel = channel or CommandChannel(session.client, replace_existing=replace_existing)
         self.agent_character_names = {name.strip().lower() for name in agent_character_names if name and str(name).strip()}
         self.self_character = self_character.strip()
@@ -36,6 +36,8 @@ class Bootstrapper:
         self.memory = memory if memory is not None else WorkingMemory()
         self.knowledge = WorldKnowledge()
         self._on_commands = on_commands
+        self._prompts = {str(name).strip().lower(): prompt for name, prompt in (prompts or {}).items()}
+        self._ollama = ollama
 
     def bootstrap(self) -> WorldKnowledge:
         self.knowledge.login_lines = self.channel.read_until_prompt()
@@ -56,7 +58,9 @@ class Bootstrapper:
             self.knowledge.remember_area(area)
         for player in self.world_reader.read_players(self.channel, self.agent_character_names, self.self_character):
             self.knowledge.remember_player(player)
-        self._observe_room(self.channel.exchange("look"))
+        look_lines = self.channel.exchange("look")
+        self._observe_room(look_lines)
+        self._send_room_prompts(look_lines)
         return self.knowledge
 
     def learn_commands(self, prompt: Prompt, client: OllamaClient) -> CommandLesson:
@@ -212,6 +216,26 @@ class Bootstrapper:
         for player in observation.players_present:
             self.knowledge.note_player_seen(player.name, observation.room.name)
 
+    def _send_room_prompts(self, lines: list[str]) -> None:
+        """Send the printed room as the user text of the room prompts."""
+        if self._ollama is None:
+            return
+        text = "\n".join(lines)
+        for name in _ROOM_PROMPTS:
+            prompt = self._prompts.get(name)
+            if prompt is None:
+                continue
+            try:
+                request = prompt.for_text(text).to_request()
+            except ValueError as exc:
+                logger.warning("Room prompt %s was not sent: %s", name, exc)
+                continue
+            logger.info("Sending the room printout as the user prompt for %s.", name)
+            try:
+                self._ollama.complete(request)
+            except OllamaError as exc:
+                logger.warning("Room prompt %s failed: %s", name, exc)
+
 
 
 def _commands_submission(prompt: Prompt, command_text: str) -> PromptSubmission:
@@ -273,13 +297,15 @@ def _known_categories(memory: WorkingMemory) -> list[str]:
     return names
 
 
+_ROOM_PROMPTS = ("look", "items", "exits", "mobs")
+
+
 def _submission(prompt: Prompt, server_text: str, placeholder: str) -> PromptSubmission:
-    user = prompt.user
-    if placeholder in user:
-        user = user.replace(placeholder, server_text)
-    else:
-        user = server_text
-    return PromptSubmission(name=prompt.name, model=prompt.model, system=prompt.system, user=user, json_schema=dict(prompt.json_schema), intents=())
+    """The user message is the server text. A sample stored on the prompt is not sent."""
+    submission = prompt.for_text(server_text)
+    if placeholder in prompt.user and placeholder in submission.user:
+        raise ValueError(f"Prompt '{prompt.name}' did not fill {placeholder}.")
+    return submission
 
 
 def _help_text(articles: list[HelpArticle]) -> str:

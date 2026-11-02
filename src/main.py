@@ -18,12 +18,14 @@ from net.rest.AuthClient import AuthClient
 from net.rest.ConnectionCatalog import ConnectionCatalog
 from net.rest.KnowledgeClient import KnowledgeClient, KnowledgeStoreError
 from net.rest.MemoryClient import MemoryClient, MemoryStoreError
+from net.rest.OllamaClient import OllamaClient
+from net.rest.PromptClient import PromptClient, PromptStoreError
 from net.telnet.PlayerSession import PlayerSession
 from net.telnet.TelnetClient import TelnetConfig
 from play.Bootstrapper import Bootstrapper
 from play.PlayError import PlayError
 from play.WorldKnowledge import WorldKnowledge
-
+from prompt.PromptCollection import PromptCollection
 
 logger = logging.getLogger(__name__)
 
@@ -53,8 +55,14 @@ def run_agent(agent_name: str, config: AgentConfig) -> int:
     agent = registry.require(agent_name)
     catalog = ConnectionCatalog.load(config.connections_path)
     output = GameplayOutput()
-    account = AccountSession(catalog, auth_base_url=config.auth_base_url, login_path=config.login_path, telnet_host=config.telnet_host, telnet_port=config.telnet_port, auth_client_factory=lambda base_url: AuthClient(base_url, login_path=config.login_path), session_factory=lambda host, port: PlayerSession(TelnetConfig(host=host, port=port), on_line=output.write))
-    memory_client = MemoryClient(config.api_base_url, path=config.memory_path, headers_provider=lambda: account.auth_client.get_auth_headers() if account.auth_client else {})
+    print(f"Config: {config}", flush=True)
+    account = AccountSession(catalog, auth_base_url=config.auth_base_url, login_path=config.login_path,
+                             telnet_host=config.telnet_host, telnet_port=config.telnet_port,
+                             auth_client_factory=lambda base_url: AuthClient(base_url, login_path=config.login_path),
+                             session_factory=lambda host, port: PlayerSession(TelnetConfig(host=host, port=port),
+                                                                              on_line=output.write))
+    memory_client = MemoryClient(config.api_base_url, path=config.memory_path,
+                                 headers_provider=lambda: account.auth_client.get_auth_headers() if account.auth_client else {})
     memory, memory_ready = _load_memory(memory_client, agent.name)
     control = PlayerControl(memory=memory, output=output, account=account)
     server = ControlServer(control, host=config.control_host, port=config.control_port)
@@ -71,7 +79,9 @@ def run_agent(agent_name: str, config: AgentConfig) -> int:
 
     try:
         server.start()
-        print(f"Control listening on {server.host}:{server.bound_port}", flush=True)
+        if config.initial_bootstrap:
+            if _run_initial_bootstrap(account, catalog, agent, lambda: _begin_play(account, registry, agent, config, memory, memory_client, memory_ready, force=True)):
+                played = True
         control.drive(on_play, on_bootstrap=on_bootstrap, connected=lambda: account.session is None or account.session.client.connected)
     except PlayError as exc:
         print(str(exc), file=sys.stderr)
@@ -88,7 +98,29 @@ def run_agent(agent_name: str, config: AgentConfig) -> int:
     return 0
 
 
-def _begin_play(account: AccountSession, registry, agent, config, memory, memory_client: MemoryClient, memory_ready: bool, force: bool = False) -> bool:
+def _open_agent_session(account: AccountSession, catalog: ConnectionCatalog, agent) -> bool:
+    """Connect the saved account for this agent and log on as its character."""
+    try:
+        connection = catalog.for_account(agent.account_name)
+    except LookupError as exc:
+        print(str(exc), file=sys.stderr)
+        return False
+    print(account.connect(connection.name), flush=True)
+    if account.auth is None:
+        return False
+    print(account.logon(agent.character_name), flush=True)
+    return account.logged_on
+
+
+def _run_initial_bootstrap(account: AccountSession, catalog: ConnectionCatalog, agent, begin) -> bool:
+    """Log on as the agent, then run bootstrap. A failed logon does not call begin."""
+    if not _open_agent_session(account, catalog, agent):
+        return False
+    return bool(begin())
+
+
+def _begin_play(account: AccountSession, registry, agent, config, memory, memory_client: MemoryClient,
+                memory_ready: bool, force: bool = False) -> bool:
     if not account.logged_on:
         print("Log on with an available character before play.", file=sys.stderr)
         return False
@@ -105,18 +137,33 @@ def _begin_play(account: AccountSession, registry, agent, config, memory, memory
                 return True
 
     def publish(knowledge: WorldKnowledge) -> None:
-        _save_knowledge(config, account.auth_client, character.id, knowledge.to_document(character_id=character.id, character_name=character.name, agent_name=agent.name))
+        _save_knowledge(config, account.auth_client, character.id,
+                        knowledge.to_document(character_id=character.id, character_name=character.name,
+                                              agent_name=agent.name))
 
-    knowledge = Bootstrapper(account.session, [item.character_name for item in registry.all()], character.name, memory=memory, replace_existing=config.telnet_replace_existing, on_commands=publish).bootstrap()
+    knowledge = Bootstrapper(account.session, [item.character_name for item in registry.all()], character.name, memory=memory, replace_existing=config.telnet_replace_existing, on_commands=publish, prompts=_load_prompts(config, account.auth_client), ollama=OllamaClient(config.ollama_base_url, path=config.ollama_path)).bootstrap()
     memory.absorb_world(knowledge)
-    _save_knowledge(config, account.auth_client, character.id, knowledge.to_document(character_id=character.id, character_name=character.name, agent_name=agent.name))
+    _save_knowledge(config, account.auth_client, character.id,
+                    knowledge.to_document(character_id=character.id, character_name=character.name,
+                                          agent_name=agent.name))
     if memory_ready:
         _save_memory(memory_client, agent.name, memory)
-    room_name = knowledge.room.name if knowledge.room is not None else ""
-    print("Knowledge: " f"{len(knowledge.help_topics)} help, " f"{len(knowledge.areas)} areas, " f"{len(knowledge.mobiles)} mobiles, " f"{len(knowledge.npcs)} npcs, " f"{len(knowledge.players)} players.")
-    if room_name:
-        print(f"Current room: {room_name}")
+    print(WorldKnowledge.summary(knowledge), flush=True)
     return True
+
+
+def _load_prompts(config: AgentConfig, auth_client: AuthClient | None) -> dict:
+    """Room prompts loaded for login. A failed read leaves the room text unsent."""
+    headers = auth_client.get_auth_headers if auth_client is not None else (lambda: {})
+    client = PromptClient(config.api_base_url, path=config.prompts_path, headers_provider=headers)
+    try:
+        documents = client.list()
+        collection = PromptCollection.from_documents(documents, config.prompts_path)
+    except (PromptStoreError, TypeError, ValueError) as exc:
+        logger.warning("Prompts were not loaded: %s", exc)
+        print(f"Prompts were not loaded: {exc}", file=sys.stderr)
+        return {}
+    return {prompt.name.lower(): prompt for prompt in collection.prompts}
 
 
 def _load_memory(client: MemoryClient, agent_name: str) -> tuple[WorkingMemory, bool]:
@@ -174,6 +221,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     config = AgentConfig.load(args.config)
+    print(f"Agent config: {config}", flush=True)
     if args.list or not args.agent:
         list_agents(load_registry(config))
         return 0

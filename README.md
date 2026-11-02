@@ -22,7 +22,7 @@ python -m main --list
 python -m main --agent example-agent
 ```
 
-The process starts idle and listens on `127.0.0.1:9711`. From another shell, send one command at a time:
+The process starts idle and listens on `127.0.0.1:9711`. `bootstrap.initial` in `resources/agent.yml` connects the saved account for that agent, logs on its character, and runs bootstrap before waiting for control commands. From another shell, send one command at a time:
 
 ```powershell
 $env:PYTHONPATH = "src"
@@ -34,7 +34,7 @@ python -m cli play
 
 `logon` accepts only a character printed by `list`. The CLI and the listener accept only `idle`, `play`, `list`, `connect <name>`, `logon <name>`, `memory [path]`, and `output [on|off|file [off|path]]`. `python src/main.py --list` works without `PYTHONPATH`.
 
-Auth URL and telnet host defaults live in `resources/agent.yml`. A saved connection supplies its own server URL and telnet host. Defaults are auth `http://localhost:8169` and telnet `localhost:6969`.
+Auth is `auth.base_url` and `auth.login_path` in `resources/agent.yml`. A saved connection does not replace that URL. Its telnet host is used when it names one.
 
 ## Test
 

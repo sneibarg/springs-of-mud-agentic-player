@@ -25,6 +25,7 @@ class AgentConfig:
     connections_path: Path
     control_host: str
     control_port: int
+    initial_bootstrap: bool
 
     @classmethod
     def load(cls, path: str) -> "AgentConfig":
@@ -44,7 +45,12 @@ class AgentConfig:
         collection = _section(raw, "collection")
         connections = _section(raw, "connections")
         control = _section(raw, "control")
-        auth_base_url = str(auth.get("base_url", "http://localhost:8169")).rstrip("/")
+        auth_base_url = str(auth.get("base_url", "")).strip().rstrip("/")
+        login_path = str(auth.get("login_path", "")).strip()
+        if not auth_base_url:
+            raise ValueError("auth.base_url is required")
+        if not login_path.startswith("/"):
+            raise ValueError("auth.login_path is required")
         api_base_url = str(api.get("base_url", "http://dragon:9080")).rstrip("/")
         replace_existing = str(telnet.get("replace_existing", "Y")).strip().upper()[:1] or "Y"
         if replace_existing not in ("Y", "N"):
@@ -67,8 +73,12 @@ class AgentConfig:
             raise ValueError("control.port must be a TCP port") from None
         if not 1 <= control_port <= 65535:
             raise ValueError("control.port must be a TCP port")
+        bootstrap = _section(raw, "bootstrap")
+        initial_bootstrap = bootstrap.get("initial", False)
+        if not isinstance(initial_bootstrap, bool):
+            raise ValueError("bootstrap.initial must be a boolean")
 
-        return cls(auth_base_url=auth_base_url, login_path=str(auth.get("login_path", "/api/auth/login")), telnet_host=str(telnet.get("host", "localhost")), telnet_port=int(telnet.get("port", 6969)), telnet_replace_existing=replace_existing, api_base_url=api_base_url, agents_path=_api_path(api.get("agents_path", "/api/v1/agents")), prompts_path=_api_path(api.get("prompts_path", "/api/v1/agent-prompts")), memory_path=_api_path(api.get("memory_path", "/api/v1/agent-memory")), knowledge_path=_api_path(knowledge.get("path", "/api/v1/agent-knowledge")), ollama_base_url=str(ollama.get("base_url", "http://localhost:9081")).rstrip("/"), ollama_path=str(ollama.get("path", "/ollama/completions")), database=database, collection_name=collection_name, collection_path=collection_path, connections_path=connections_path, control_host=control_host, control_port=control_port)
+        return cls(auth_base_url=auth_base_url, login_path=login_path, telnet_host=str(telnet.get("host", "localhost")), telnet_port=int(telnet.get("port", 6969)), telnet_replace_existing=replace_existing, api_base_url=api_base_url, agents_path=_api_path(api.get("agents_path", "/api/v1/agents")), prompts_path=_api_path(api.get("prompts_path", "/api/v1/agent-prompts")), memory_path=_api_path(api.get("memory_path", "/api/v1/agent-memory")), knowledge_path=_api_path(knowledge.get("path", "/api/v1/agent-knowledge")), ollama_base_url=str(ollama.get("base_url", "http://localhost:9081")).rstrip("/"), ollama_path=str(ollama.get("path", "/ollama/completions")), database=database, collection_name=collection_name, collection_path=collection_path, connections_path=connections_path, control_host=control_host, control_port=control_port, initial_bootstrap=initial_bootstrap)
 
 
 def _api_path(value: object) -> str:

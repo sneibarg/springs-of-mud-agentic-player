@@ -32,10 +32,10 @@ class TestAuthClient(unittest.TestCase):
             captured["timeout"] = timeout
             return _Response({"id": "account-1", "firstName": "Ada", "lastName": "Lovelace", "accountName": "ada", "emailAddress": "ada@example.com", "password": "secret", "playerCharacterList": [{"id": "char-1", "name": "Example"}, {"id": "char-2", "name": "Other"}]}, {"Authorization": "jwt-token"})
 
-        client = AuthClient("http://localhost:8169/", post=post)
+        client = AuthClient("http://dragon:8169/", "/api/auth/login", post=post)
         auth = client.login("ada", "secret")
 
-        self.assertEqual(captured["url"], "http://localhost:8169/api/auth/login")
+        self.assertEqual(captured["url"], "http://dragon:8169/api/auth/login")
         self.assertEqual(captured["json"], {"accountName": "ada", "password": "secret"})
         self.assertEqual(client.jwt_token, "jwt-token")
         self.assertEqual(client.get_auth_headers(), {"Authorization": "Bearer jwt-token"})
@@ -48,7 +48,7 @@ class TestAuthClient(unittest.TestCase):
         def post(url, json, timeout):
             return _Response({"id": "account-1", "accountName": "sneibarg", "playerCharacterList": [{"id": "char-1", "name": "Fizban", "level": 60}, {"id": "char-2", "name": "Janky", "level": 8}]}, {})
 
-        auth = AuthClient(post=post).login("sneibarg", "secret")
+        auth = AuthClient("http://dragon:8169", "/api/auth/login", post=post).login("sneibarg", "secret")
         character = auth.lowest_level_character()
         self.assertEqual(character.name, "Janky")
         self.assertEqual(character.level, 8)
@@ -57,9 +57,17 @@ class TestAuthClient(unittest.TestCase):
         def post(url, json, timeout):
             return _Response({"id": "account-1", "accountName": "ada", "playerCharacterList": []}, {"Authorization": "Bearer already"})
 
-        client = AuthClient(post=post)
+        client = AuthClient("http://dragon:8169", "/api/auth/login", post=post)
         client.login("ada", "secret")
         self.assertEqual(client.get_auth_headers(), {"Authorization": "Bearer already"})
+
+    def test_base_url_and_login_path_are_required(self):
+        with self.assertRaises(ValueError) as missing_base:
+            AuthClient("", "/api/auth/login")
+        self.assertEqual(str(missing_base.exception), "Auth base URL is required")
+        with self.assertRaises(ValueError) as missing_path:
+            AuthClient("http://dragon:8169", "")
+        self.assertEqual(str(missing_path.exception), "Auth login path is required")
 
 
 if __name__ == "__main__":

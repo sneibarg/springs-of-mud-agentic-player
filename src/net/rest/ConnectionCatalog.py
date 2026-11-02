@@ -30,6 +30,16 @@ class ConnectionCatalog:
                 return connection
         raise LookupError(f"Connection '{name.strip()}' not found")
 
+    def for_account(self, account_name: str) -> SavedConnection:
+        """The first saved connection whose account name matches, ignoring case."""
+        target = str(account_name or "").strip().lower()
+        if not target:
+            raise LookupError("Agent account name is required.")
+        for connection in self.connections:
+            if connection.account_name.strip().lower() == target:
+                return connection
+        raise LookupError(f"No saved connection for account '{account_name.strip()}'.")
+
 
 def _connection(entry, index: int) -> SavedConnection:
     if not isinstance(entry, dict):

@@ -47,6 +47,9 @@ class TestConnectionCatalog(unittest.TestCase):
             catalog = ConnectionCatalog.load(path)
             with self.assertRaises(LookupError):
                 catalog.named("missing")
+            self.assertEqual(catalog.for_account("ADA").name, "Local")
+            with self.assertRaises(LookupError):
+                catalog.for_account("missing")
 
 
 if __name__ == "__main__":

@@ -83,6 +83,21 @@ class TestKnowledgeClient(unittest.TestCase):
         self.assertEqual(document["commands"][0]["helpText"], "Look around.")
         self.assertEqual(restored.command_records()[0].category, "information")
 
+    def test_summary_counts_the_items_in_the_room(self):
+        knowledge = WorldKnowledge()
+        knowledge.remember_help(HelpTopic(command="look", keyword="LOOK", text="Look around.", raw="LOOK"))
+        knowledge.remember_command("look", help_text="Look around.")
+        knowledge.remember_area(AreaRecord(name="Temple of Mota", author="Romy"))
+        knowledge.remember_mobile(BeingRecord(name="a healer", kind="mobile", pose="here", room_name="By the Temple Altar"))
+        knowledge.remember_player(PlayerRecord(name="Janky", level=8, race="human", character_class="War"))
+        knowledge.remember_player(PlayerRecord(name="Fizban", level=60, race="human", character_class="IMP"))
+        knowledge.room = RoomSnapshot(name="By the Temple Altar", exits=["south", "up"], item_lines=["A pit for sacrifices is in front of the altar."])
+
+        text = WorldKnowledge.summary(knowledge)
+
+        self.assertEqual(text, "Knowledge: 1 help, 1 commands, 1 areas, 1 mobiles, 0 npcs, 2 players, 1 items.\nCurrent room: By the Temple Altar")
+        self.assertEqual(WorldKnowledge.summary(WorldKnowledge()), "Knowledge: 0 help, 0 commands, 0 areas, 0 mobiles, 0 npcs, 0 players, 0 items.")
+
     def test_help_topics_supply_commands_when_the_command_list_is_absent(self):
         knowledge = WorldKnowledge.from_document({"helpTopics": [{"command": "look", "keyword": "LOOK", "text": "Look around.", "raw": "LOOK", "missing": False, "topics": []}]})
         self.assertTrue(knowledge.has_commands())

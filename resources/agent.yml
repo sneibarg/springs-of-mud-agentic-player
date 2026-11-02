@@ -1,5 +1,5 @@
 auth:
-  base_url: http://localhost:8169
+  base_url: http://dragon:8169
   login_path: /api/auth/login
 telnet:
   host: localhost
@@ -10,7 +10,7 @@ api:
 knowledge:
   path: /api/v1/agent-knowledge
 ollama:
-  base_url: http://localhost:9081
+  base_url: http://dragon:9081
   path: /ollama/completions
 collection:
   database: SOMDB
@@ -21,3 +21,5 @@ connections:
 control:
   host: 127.0.0.1
   port: 9711
+bootstrap:
+  initial: true

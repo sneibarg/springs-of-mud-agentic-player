@@ -1,6 +1,6 @@
 # Architecture Map
 
-- `src/main.py` loads `resources/agent.yml`, reads agents with `GET /api/v1/agents`, and listens on the local control socket. The agent starts idle. The first `play` bootstraps game knowledge. A later `play` restores commands from stored world knowledge. `bootstrap` runs that login again.
+- `src/main.py` loads `resources/agent.yml`, reads agents with `GET /api/v1/agents`, and listens on the local control socket. The agent starts idle. The first `play` bootstraps game knowledge. A later `play` restores commands from stored world knowledge. `bootstrap` runs that login again. When `bootstrap.initial` is true, startup connects the saved account for the agent's `accountName`, logs on `characterName`, and runs that same bootstrap before the control loop. The mode stays idle.
 - `src/agent` owns `Agent`, `AgentCollection`, `AgentRegistry`, and `AgentConfig`.
 - `src/control` owns `PlayerControl` and `GameplayOutput`. `handle` accepts `idle`, `play`, `bootstrap`, `memory`, `output`, `connect`, `list`, and `logon`.
 - `src/cli` is the operator invoker. `python -m cli` sends one known command. `src/net/local/ControlServer` accepts it on `127.0.0.1`. The transport is one raw TCP socket.

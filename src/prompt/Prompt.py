@@ -1,4 +1,5 @@
 import json
+import re
 
 from copy import deepcopy
 from dataclasses import dataclass
@@ -85,6 +86,18 @@ class Prompt:
         system = self.system.replace("{response}", response_json, 1).replace("{intent}", ", ".join(phrases), 1)
         user = self.user.replace("{score}", _score_text(score), 1)
         return PromptSubmission(name=self.name, model=self.model, system=system, user=user, json_schema=schema, intents=tuple(chosen))
+
+    def for_text(self, text: str) -> PromptSubmission:
+        """Put live server text in the user field. A sample user is not sent."""
+        body = text if isinstance(text, str) else ""
+        if not body.strip():
+            raise ValueError("User prompt cannot be null or empty")
+        placeholders = _USER_PLACEHOLDER.findall(self.user)
+        user = self.user.replace(placeholders[0], body, 1) if len(placeholders) == 1 else body
+        return PromptSubmission(name=self.name, model=self.model, system=self.system, user=user, json_schema=dict(self.json_schema), intents=())
+
+
+_USER_PLACEHOLDER = re.compile(r"\{[A-Za-z][A-Za-z0-9]*\}")
 
 
 def _example_fields(name: str, example: Any) -> Mapping[str, Any]:

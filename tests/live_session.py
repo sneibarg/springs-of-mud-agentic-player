@@ -1,7 +1,7 @@
 """One live SpringsOfMUD session for integration tests.
 
-The saved profile names localhost. som-auth-service answers on dragon at the
-same port when localhost does not. Telnet stays on the profile host.
+Auth comes from resources/agent.yml. Telnet uses the saved profile host when
+that profile names one, and agent.yml otherwise.
 """
 
 import os
@@ -9,13 +9,13 @@ import socket
 import sys
 import time
 import unittest
-from dataclasses import replace
 from pathlib import Path
 from urllib.parse import urlparse
 
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
+from agent.AgentConfig import AgentConfig
 from net.AccountSession import AccountSession
 from net.rest.ConnectionCatalog import ConnectionCatalog
 from play.CommandChannel import CommandChannel
@@ -26,7 +26,6 @@ PROFILE = "SpringsOfMUD"
 SKIP_REASON = f"{PROFILE} auth or telnet is not accepting connections."
 QUIT_PHRASE = "Alas, all good things must come to an end."
 PROMPT_TIMEOUT_S = 20.0
-_AUTH_FALLBACK_HOST = "dragon"
 
 
 def _tcp_open(host: str, port: int, timeout_s: float = 0.8) -> bool:
@@ -46,17 +45,6 @@ def _tcp_open(host: str, port: int, timeout_s: float = 0.8) -> bool:
 def _endpoint(url: str, default_port: int) -> tuple[str, int]:
     parsed = urlparse(url if "://" in url else f"http://{url}")
     return parsed.hostname or "", parsed.port or default_port
-
-
-def _auth_url(server_url: str) -> str:
-    host, port = _endpoint(server_url, 8169)
-    if _tcp_open(host, port):
-        return server_url
-    if host in {"localhost", "127.0.0.1"} and _tcp_open(_AUTH_FALLBACK_HOST, port):
-        parsed = urlparse(server_url if "://" in server_url else f"http://{server_url}")
-        scheme = parsed.scheme or "http"
-        return f"{scheme}://{_AUTH_FALLBACK_HOST}:{port}"
-    return ""
 
 
 class LivePlay:
@@ -109,15 +97,16 @@ class LivePlay:
 
 def open_live_play() -> LivePlay | None:
     """Log on the lowest-level character. None means auth or telnet is closed."""
-    catalog = ConnectionCatalog.load(ROOT / "resources" / "connections.json")
+    config = AgentConfig.load(ROOT / "resources" / "agent.yml")
+    catalog = ConnectionCatalog.load(config.connections_path)
     saved = catalog.named(PROFILE)
-    auth_url = _auth_url(saved.server_url or "http://localhost:8169")
-    telnet_host = saved.telnet_host or "localhost"
-    telnet_port = saved.telnet_port or 6969
-    if not auth_url or not _tcp_open(telnet_host, telnet_port):
+    auth_host, auth_port = _endpoint(config.auth_base_url, 8169)
+    telnet_host = saved.telnet_host or config.telnet_host
+    telnet_port = saved.telnet_port if saved.telnet_port is not None else config.telnet_port
+    if not _tcp_open(auth_host, auth_port) or not _tcp_open(telnet_host, telnet_port):
         return None
 
-    account = AccountSession(ConnectionCatalog([replace(saved, server_url=auth_url)]), telnet_host=telnet_host, telnet_port=telnet_port)
+    account = AccountSession(catalog, auth_base_url=config.auth_base_url, login_path=config.login_path, telnet_host=config.telnet_host, telnet_port=config.telnet_port)
     try:
         connected = account.connect(PROFILE)
         if not connected.startswith("Connected as ") or "failed" in connected.lower():
