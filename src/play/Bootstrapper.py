@@ -11,11 +11,10 @@ from play.CommandLesson import CommandLesson
 from play.HelpLesson import HelpLesson
 from play.HelpReader import HelpReader, parse_command_names, parse_help
 from play.PlayError import PromptTimeout
-from play.WorldKnowledge import HelpArticle, WorldKnowledge
+from play.WorldKnowledge import HelpArticle, RoomItem, RoomSnapshot, WorldKnowledge
 from play.WorldReader import WorldReader
 from prompt.Prompt import Prompt
 from prompt.PromptSubmission import PromptSubmission
-
 
 logger = logging.getLogger(__name__)
 
@@ -27,9 +26,14 @@ class Bootstrapper:
     index does not list is categorized from its own help page.
     """
 
-    def __init__(self, session, agent_character_names: Iterable[str], self_character: str, channel: Optional[CommandChannel] = None, help_reader: Optional[HelpReader] = None, world_reader: Optional[WorldReader] = None, memory: Optional[WorkingMemory] = None, replace_existing: str = "Y", on_commands: Optional[Callable[[WorldKnowledge], None]] = None, prompts: Optional[dict] = None, ollama: Optional[OllamaClient] = None):
+    def __init__(self, session, agent_character_names: Iterable[str], self_character: str,
+                 channel: Optional[CommandChannel] = None, help_reader: Optional[HelpReader] = None,
+                 world_reader: Optional[WorldReader] = None, memory: Optional[WorkingMemory] = None,
+                 replace_existing: str = "Y", on_commands: Optional[Callable[[WorldKnowledge], None]] = None,
+                 prompts: Optional[dict] = None, ollama: Optional[OllamaClient] = None, defer: bool = False):
         self.channel = channel or CommandChannel(session.client, replace_existing=replace_existing)
-        self.agent_character_names = {name.strip().lower() for name in agent_character_names if name and str(name).strip()}
+        self.agent_character_names = {name.strip().lower() for name in agent_character_names if
+                                      name and str(name).strip()}
         self.self_character = self_character.strip()
         self.help_reader = help_reader or HelpReader()
         self.world_reader = world_reader or WorldReader()
@@ -38,20 +42,19 @@ class Bootstrapper:
         self._on_commands = on_commands
         self._prompts = {str(name).strip().lower(): prompt for name, prompt in (prompts or {}).items()}
         self._ollama = ollama
+        self._defer = defer
 
     def bootstrap(self) -> WorldKnowledge:
         self.knowledge.login_lines = self.channel.read_until_prompt()
         if not self.channel.saw_prompt:
             raise PromptTimeout("No playing prompt after logon.", self.knowledge.login_lines)
         self.memory.replace_commands([])
-        command_names = self._remember_commands()
-        logger.info("Reading help for the commands the server made available.")
-        for topic in self.help_reader.read_named(self.channel, command_names):
-            self.knowledge.remember_help(topic)
-        self._publish_commands()
-        for command in self.knowledge.command_records():
-            if command.help_text.strip():
-                self.memory.remember_command(command.name, help_text=command.help_text)
+        if self._defer or not self._can_learn_commands():
+            if self._defer:
+                logger.info("Deferring Ollama requests. Server help is stored on world knowledge.")
+            self._read_server_help()
+        else:
+            self._learn_command_knowledge()
 
         logger.info("Reading areas, players, and the current room.")
         for area in self.world_reader.read_areas(self.channel):
@@ -60,7 +63,8 @@ class Bootstrapper:
             self.knowledge.remember_player(player)
         look_lines = self.channel.exchange("look")
         self._observe_room(look_lines)
-        self._send_room_prompts(look_lines)
+        if not self._defer:
+            self._send_room_prompts(look_lines)
         return self.knowledge
 
     def learn_commands(self, prompt: Prompt, client: OllamaClient) -> CommandLesson:
@@ -73,6 +77,10 @@ class Bootstrapper:
         lines = self.channel.exchange("commands")
         names = parse_command_names(lines)
         self.memory.remember_commands(names)
+        if self._defer:
+            logger.info("Deferring the commands prompt.")
+            self._publish_commands()
+            return CommandLesson(prompt={}, response="", commands=names)
         submission = _commands_submission(prompt, "\n".join(lines))
         request = submission.to_request()
         try:
@@ -81,7 +89,7 @@ class Bootstrapper:
         except OllamaError as exc:
             response = ""
             error = str(exc)
-        self._publish_commands()
+        self._commit_ollama()
         return CommandLesson(prompt=request, response=response, commands=names, error=error)
 
     def learn_categories(self, prompt: Prompt, client: OllamaClient) -> CategoryLesson:
@@ -92,6 +100,9 @@ class Bootstrapper:
         """
         logger.info("Reading command categories from the help index.")
         lines = self.channel.exchange("help")
+        if self._defer:
+            logger.info("Deferring the categories prompt.")
+            return CategoryLesson(prompt={}, response="")
         try:
             request = _submission(prompt, "\n".join(lines), "{categories}").to_request()
         except ValueError as exc:
@@ -106,7 +117,7 @@ class Bootstrapper:
         parsed, _parse_error = lesson.parsed_categories()
         if parsed:
             self._remember_categories(parsed)
-        self._publish_commands()
+        self._commit_ollama()
         return lesson
 
     def learn_help(self, prompt: Prompt, client: OllamaClient, names: list[str] | None = None, on_lesson=None) -> list[HelpLesson]:
@@ -126,6 +137,12 @@ class Bootstrapper:
             current = self.memory.command_named(name)
             needs_category = current is None or not current.category.strip()
             lines = self.channel.exchange(f"help {name}")
+            if self._defer:
+                self._remember_server_help(name, lines)
+                lessons.append(HelpLesson(command=name, prompt={}, response=""))
+                if on_lesson is not None:
+                    on_lesson(lessons[-1])
+                continue
             lesson = _ask_help(prompt, client, name, lines, categories if needs_category else None)
             self._remember_help(name, lines, lesson)
             if needs_category:
@@ -135,7 +152,7 @@ class Bootstrapper:
             lessons.append(lesson)
             if on_lesson is not None:
                 on_lesson(lesson)
-        self._publish_commands()
+        self._commit_ollama()
         return lessons
 
     def commands_for_help(self, listed: list[str] | None = None) -> list[str]:
@@ -167,6 +184,12 @@ class Bootstrapper:
                     continue
                 self.memory.remember_command(name, category=category["name"])
 
+    def _remember_server_help(self, name: str, lines: list[str]) -> None:
+        """Store one server help page without asking Ollama."""
+        topic = parse_help(name, lines)
+        self.knowledge.remember_help(topic)
+        self.memory.remember_command(name, help_text=topic.text)
+
     def _remember_help(self, name: str, lines: list[str], lesson: HelpLesson) -> None:
         topic = parse_help(name, lines)
         parsed, _parse_error = lesson.parsed_help()
@@ -184,7 +207,13 @@ class Bootstrapper:
         else:
             topic.keyword = ""
             topic.text = ""
-        self.knowledge.remember_help(topic)
+        if self._defer:
+            self.knowledge.remember_help(topic)
+
+    def _commit_ollama(self) -> None:
+        """Persist server command help when bootstrap.defer is true. A false setting leaves model results on working memory."""
+        if self._defer:
+            self._publish_commands()
 
     def _publish_commands(self) -> None:
         """Copy the session command list onto world knowledge and persist it when a saver is installed."""
@@ -197,6 +226,32 @@ class Bootstrapper:
                 command.help_text = topic.text.strip()
         if self._on_commands is not None:
             self._on_commands(self.knowledge)
+
+    def _can_learn_commands(self) -> bool:
+        """True when the live command bootstrap can run: categories, commands, help, and Ollama."""
+        return self._ollama is not None and all(name in self._prompts for name in ("categories", "commands", "help"))
+
+    def _learn_command_knowledge(self) -> None:
+        """The same order as the live command bootstrap.
+
+        Bare `help` supplies categories. `commands` adds the columnar list
+        without clearing those categories. `help <name>` then covers that list
+        plus any index command the list omitted, and stores each extracted topic.
+        """
+        self.learn_categories(self._prompts["categories"], self._ollama)
+        lesson = self.learn_commands(self._prompts["commands"], self._ollama)
+        self.learn_help(self._prompts["help"], self._ollama, names=self.commands_for_help(lesson.commands))
+
+    def _read_server_help(self) -> None:
+        """Store the server command list and each help page without asking Ollama."""
+        command_names = self._remember_commands()
+        logger.info("Reading help for the commands the server made available.")
+        for topic in self.help_reader.read_named(self.channel, command_names):
+            self.knowledge.remember_help(topic)
+        self._publish_commands()
+        for command in self.knowledge.command_records():
+            if command.help_text.strip():
+                self.memory.remember_command(command.name, help_text=command.help_text)
 
     def _remember_commands(self) -> list[str]:
         """Store the names from `commands`. This step does not categorize them."""
@@ -218,7 +273,7 @@ class Bootstrapper:
 
     def _send_room_prompts(self, lines: list[str]) -> None:
         """Send the printed room as the user text of the room prompts."""
-        if self._ollama is None:
+        if self._defer or self._ollama is None:
             return
         text = "\n".join(lines)
         for name in _ROOM_PROMPTS:
@@ -232,17 +287,51 @@ class Bootstrapper:
                 continue
             logger.info("Sending the room printout as the user prompt for %s.", name)
             try:
-                self._ollama.complete(request)
+                response = self._ollama.complete(request)
             except OllamaError as exc:
                 logger.warning("Room prompt %s failed: %s", name, exc)
+                continue
+            if name == "look":
+                self._remember_look_items(response)
 
+    def _remember_look_items(self, response: str) -> None:
+        """Store the look prompt's items on the session room.
+
+        A sign named in the description is one of those items. Later play
+        reads the saved room instead of asking the model again.
+        """
+        try:
+            parsed = json.loads(response)
+        except json.JSONDecodeError:
+            logger.warning("Room prompt look was not stored: the response was not JSON.")
+            return
+        if not isinstance(parsed, dict) or not isinstance(parsed.get("items"), list):
+            logger.warning("Room prompt look was not stored: the response did not list items.")
+            return
+        room = self.knowledge.room
+        observed = str(room.name or "").strip() if room is not None else ""
+        name = observed or str(parsed.get("name") or "").strip()
+        if not name:
+            return
+        description = str(room.description or "") if observed else str(parsed.get("description") or "")
+        exits = list(room.exits or []) if observed else [str(exit_name) for exit_name in parsed.get("exits") or []]
+        session_room = self.memory.remember_room(name, description=description, exits=exits or None, items=parsed["items"])
+        if not self._defer:
+            return
+        snapshot = self.knowledge.room
+        if snapshot is None:
+            snapshot = RoomSnapshot(name=name, description=description, exits=list(exits))
+            self.knowledge.room = snapshot
+        snapshot.items = [RoomItem(name=item.name, line=item.line, source=item.source) for item in session_room.items]
+        self._publish_commands()
 
 
 def _commands_submission(prompt: Prompt, command_text: str) -> PromptSubmission:
     return _submission(prompt, command_text, "{commands}")
 
 
-def _ask_help(prompt: Prompt, client: OllamaClient, command: str, lines: list[str], categories: list[str] | None = None) -> HelpLesson:
+def _ask_help(prompt: Prompt, client: OllamaClient, command: str, lines: list[str],
+              categories: list[str] | None = None) -> HelpLesson:
     requested = categories is not None
     try:
         request = _submission(prompt, "\n".join(lines), "{help}").to_request()
@@ -281,7 +370,8 @@ def _category_instruction(command: str, categories: list[str]) -> str:
     else:
         lines.append("Choose a short category name for this command.")
     lines.append('Add a "category" string to the JSON object.')
-    lines.append('If the page is exactly "No help on that word.", return missing true, an empty topics list, and the category.')
+    lines.append(
+        'If the page is exactly "No help on that word.", return missing true, an empty topics list, and the category.')
     lines.append("If the page has help text, return the topics and the category.")
     return "\n".join(lines)
 

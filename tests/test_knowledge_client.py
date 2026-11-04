@@ -76,6 +76,7 @@ class TestKnowledgeClient(unittest.TestCase):
         self.assertTrue(restored.player_named("Example").agentic)
         self.assertEqual(restored.room.exits, ["north"])
         self.assertEqual(restored.room.item_lines, ["a fountain"])
+        self.assertEqual(restored.room.items, [])
         self.assertEqual(document["mobiles"][0]["auras"], ["White Aura"])
         self.assertEqual(document["npcs"][0]["auras"], ["Golden Aura"])
         self.assertEqual(document["players"][0]["auras"], ["Red Aura"])
@@ -95,8 +96,8 @@ class TestKnowledgeClient(unittest.TestCase):
 
         text = WorldKnowledge.summary(knowledge)
 
-        self.assertEqual(text, "Knowledge: 1 help, 1 commands, 1 areas, 1 mobiles, 0 npcs, 2 players, 1 items.\nCurrent room: By the Temple Altar")
-        self.assertEqual(WorldKnowledge.summary(WorldKnowledge()), "Knowledge: 0 help, 0 commands, 0 areas, 0 mobiles, 0 npcs, 0 players, 0 items.")
+        self.assertEqual(text, "Knowledge: 1 help, 0 topics, 1 commands, 0 categorized, 1 areas, 1 mobiles, 0 npcs, 2 players, 1 items.\nCurrent room: By the Temple Altar")
+        self.assertEqual(WorldKnowledge.summary(WorldKnowledge()), "Knowledge: 0 help, 0 topics, 0 commands, 0 categorized, 0 areas, 0 mobiles, 0 npcs, 0 players, 0 items.")
 
     def test_help_topics_supply_commands_when_the_command_list_is_absent(self):
         knowledge = WorldKnowledge.from_document({"helpTopics": [{"command": "look", "keyword": "LOOK", "text": "Look around.", "raw": "LOOK", "missing": False, "topics": []}]})

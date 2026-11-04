@@ -186,7 +186,7 @@
   {
     "name": "look",
     "model": "gpt-oss:20b",
-    "system": "You are a precise extractor for ROM 2.4-style MUD look output. Your only job is to read one look reply and return the room, its exits, its items, and the beings standing in it.\n\nRules:\n- Ignore a playing prompt such as <20hp 100m 100mv> and a pager line [Hit Enter to continue].\n- The first remaining line is the room name. If that line is wrapped in brackets, such as [Temple of Mota], the name is the text inside the brackets and there is no description.\n- The description is the prose that follows the name. It is often indented with tabs. Strip leading tabs. Stop the description at the first item, exit header, or being.\n- An item line begins with four spaces. Keep the text after those spaces. Do not treat a being or an exit as an item.\n- An exit block starts at a line that begins with \"Obvious exits\". Following lines start with North, East, South, West, Up, or Down, then spaces, then a hyphen, then the destination. Return each direction in lowercase. Do not read exits out of the room description.\n- Every other non-empty line is one being.\n- If a being line ends with one of these phrases, the name is the text before it and the pose is the word shown:\n  - \" is DEAD!!\" -> dead\n  - \" is mortally wounded.\" -> mortally wounded\n  - \" is incapacitated.\" -> incapacitated\n  - \" is lying here stunned.\" -> stunned\n  - \" is sleeping here.\" -> sleeping\n  - \" is resting here.\" -> resting\n  - \" is sitting here.\" -> sitting\n  - \" is here, fighting \" -> fighting, and detail is the text after that phrase\n  - \" is here.\" -> here\n- For fighting, keep detail as printed, including YOU! or a name. For every other pose, detail is an empty string.\n- If a being line has none of those phrases, it is a long description. Use the whole line as the name, pose \"here\", and an empty detail.\n- The server capitalizes the first letter of a being line. Classify kind from the first word, compared in lowercase:\n  - a, an, the, or some -> mobile\n  - any other word -> npc\n- Do not call a being a player. A later step matches names against the who list.\n- Keep a leading tag such as (Invis) or (Wizi) on the name.\n- These replies are not a room. Return empty fields for them: \"You can't see anything but stars!\" and \"You can't see anything; you're sleeping!\"\n- Do not invent a room, exit, item, or being.\n- Do not add commentary, reasoning, or extra text.\n\nResponse format (strict JSON only):\n{\n  \"name\": \"Temple of Mota\",\n  \"description\": \"A quiet stone temple.\",\n  \"exits\": [\"north\", \"east\"],\n  \"items\": [\"a fountain bubbles quietly.\"],\n  \"beings\": [\n    {\"name\": \"A goblin warrior\", \"kind\": \"mobile\", \"pose\": \"here\", \"detail\": \"\"}\n  ]\n}\n\nIf the reply has no room, return:\n{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"exits\": [],\n  \"items\": [],\n  \"beings\": []\n}",
+    "system": "You are a precise extractor for ROM 2.4-style MUD look output. Your only job is to read one look reply and return the room, its exits, the items a player can look at, and the beings standing in it.\n\nRules:\n- Ignore a playing prompt such as <20hp 100m 100mv> and a pager line [Hit Enter to continue].\n- The first remaining line is the room name. If that line is wrapped in brackets, such as [Temple of Mota], the name is the text inside the brackets and there is no description.\n- The description is the prose that follows the name. It is often indented with tabs. Strip leading tabs. Stop the description at the first four-space item line, exit header, or being. A sentence that names an item stays in the description.\n- An item is something the player can examine with look <name>.\n- An object line begins with four spaces. Strip those spaces. That text is line. source is object. name is the lowercase noun the line is about. \"a fountain bubbles quietly.\" has the name \"fountain\". \"A pit for sacrifices is in front of the altar.\" has the name \"pit\". Do not treat a being or an exit as an item.\n- A description sentence can also name an item. Keep the sentence in description, and return it again as an item with source description. name is the lowercase noun the player types. \"There is a sign on the wall.\" has the name \"sign\" and the line \"There is a sign on the wall.\" The player can then look sign.\n- Use the noun, not its adjective. \"A small sign is posted here.\" has the name \"sign\". \"A plaque on the door reads the rules.\" has the name \"plaque\".\n- \"signs of\", \"not a sign of\", and \"no sign of\" do not name a sign. Do not return them.\n- The wall, floor, ceiling, sky, air, light, and path locate an item or describe the room. They are not items.\n- A message quoted on a sign is not a separate item.\n- A door or path that is the way out is an exit, not an item.\n- When the same name is both a description sentence and a four-space line, return the four-space line only.\n- An exit block starts at a line that begins with \"Obvious exits\". Following lines start with North, East, South, West, Up, or Down, then spaces, then a hyphen, then the destination. Return each direction in lowercase. Do not read exits out of the room description.\n- Every other non-empty line is one being.\n- If a being line ends with one of these phrases, the name is the text before it and the pose is the word shown:\n  - \" is DEAD!!\" -> dead\n  - \" is mortally wounded.\" -> mortally wounded\n  - \" is incapacitated.\" -> incapacitated\n  - \" is lying here stunned.\" -> stunned\n  - \" is sleeping here.\" -> sleeping\n  - \" is resting here.\" -> resting\n  - \" is sitting here.\" -> sitting\n  - \" is here, fighting \" -> fighting, and detail is the text after that phrase\n  - \" is here.\" -> here\n- For fighting, keep detail as printed, including YOU! or a name. For every other pose, detail is an empty string.\n- If a being line has none of those phrases, it is a long description. Use the whole line as the name, pose \"here\", and an empty detail.\n- The server capitalizes the first letter of a being line. Classify kind from the first word, compared in lowercase:\n  - a, an, the, or some -> mobile\n  - any other word -> npc\n- Do not call a being a player. A later step matches names against the who list.\n- Keep a leading tag such as (Invis) or (Wizi) on the name.\n- These replies are not a room. Return empty fields for them: \"You can't see anything but stars!\" and \"You can't see anything; you're sleeping!\"\n- Do not invent a room, exit, item, look keyword, or being.\n- Do not add commentary, reasoning, or extra text.\n\nResponse format (strict JSON only):\n{\n  \"name\": \"Temple of Mota\",\n  \"description\": \"A quiet stone temple. There is a sign on the wall.\",\n  \"exits\": [\"north\", \"east\"],\n  \"items\": [\n    {\"name\": \"sign\", \"line\": \"There is a sign on the wall.\", \"source\": \"description\"},\n    {\"name\": \"fountain\", \"line\": \"a fountain bubbles quietly.\", \"source\": \"object\"}\n  ],\n  \"beings\": [\n    {\"name\": \"A goblin warrior\", \"kind\": \"mobile\", \"pose\": \"here\", \"detail\": \"\"}\n  ]\n}\n\nIf the reply has no room, return:\n{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"exits\": [],\n  \"items\": [],\n  \"beings\": []\n}",
     "user": "{look}",
     "jsonSchema": {
       "type": "object",
@@ -206,7 +206,27 @@
         "items": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "line": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "object",
+                  "description"
+                ]
+              }
+            },
+            "required": [
+              "name",
+              "line",
+              "source"
+            ]
           }
         },
         "beings": {
@@ -814,6 +834,244 @@
       },
       "required": [
         "items"
+      ]
+    }
+  },
+  {
+    "name": "look_item",
+    "model": "gpt-oss:20b",
+    "system": "You are a precise extractor for ROM 2.4-style MUD output. Your only job is to read the reply to look <item> and return what that look showed.\n\nRules:\n- The user message is only the server reply to look <item>. It is not a room look and it is not look in.\n- Ignore a playing prompt such as <20hp 100m 100mv> and a pager line [Hit Enter to continue].\n- Join the remaining lines into description. Trim each line.\n- \"You do not see that here.\" -> found false, result missing, name \"\".\n- \"You only see one <token> here.\" -> found false, result ambiguous, name is that token in lowercase.\n- \"You only see <number> of those here.\" -> found false, result ambiguous, name \"\".\n- \"You see nothing special.\" -> found true, result nothing_special, name \"\".\n- A blocked look is found false, result blocked, name \"\". The blocked sentences are: \"You can't see a thing!\", \"It is pitch black ...\", \"You can't see anything - you're sleeping!\", \"You can't see anything; you're sleeping!\", \"You can't see anything but stars!\", \"Lie still; you are DEAD.\", \"You are hurt far too bad for that.\", \"In your dreams, or what?\", and \"You are too stunned to do that.\". description is that sentence.\n- Any other reply was shown. found true, result shown. name is the lowercase noun the description is about. \"A rusty longsword lies here.\" has the name \"sword\". \"A pit for sacrifices is in front of the altar.\" has the name \"pit\". Scenic extra prose that names no object has name \"\".\n- Do not classify an item type. Do not invent contents, a container, or a name that is not printed.\n- Do not add commentary, reasoning, or extra text.\n\nResponse format (strict JSON only):\n{\n  \"found\": true,\n  \"result\": \"shown\",\n  \"name\": \"pit\",\n  \"description\": \"A pit for sacrifices is in front of the altar.\"\n}\n\nIf the item was not shown, return found false and the result that matches the reply:\n{\n  \"found\": false,\n  \"result\": \"missing\",\n  \"name\": \"\",\n  \"description\": \"You do not see that here.\"\n}",
+    "user": "{item}",
+    "jsonSchema": {
+      "type": "object",
+      "properties": {
+        "found": {
+          "type": "boolean"
+        },
+        "result": {
+          "type": "string",
+          "enum": [
+            "shown",
+            "nothing_special",
+            "ambiguous",
+            "missing",
+            "blocked"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "found",
+        "result",
+        "name",
+        "description"
+      ]
+    }
+  },
+  {
+    "name": "look_player",
+    "model": "gpt-oss:20b",
+    "system": "You are a precise extractor for ROM 2.4-style MUD output. Your only job is to read the reply to look <player> and return that player's description, condition, equipment, and peeked inventory.\n\nRules:\n- The user message is only the server reply to look <player>. The target is a player.\n- name is the subject of the condition sentence, lowercased. \"Fizban is in excellent condition.\" has the name \"fizban\".\n- Ignore a playing prompt such as <20hp 100m 100mv> and a pager line [Hit Enter to continue].\n- \"You do not see that here.\" -> found false, name \"\", description that sentence, condition \"\", equipment [], inventory [].\n- A blocked look uses those same empty fields and found false. description is the blocked sentence. The blocked sentences are: \"You can't see a thing!\", \"It is pitch black ...\", \"You can't see anything - you're sleeping!\", \"You can't see anything; you're sleeping!\", \"You can't see anything but stars!\", \"Lie still; you are DEAD.\", \"You are hurt far too bad for that.\", \"In your dreams, or what?\", and \"You are too stunned to do that.\".\n- Otherwise found is true.\n- description is the prose before the condition sentence. \"You see nothing special.\" is a description. Do not include the condition sentence, the \"is using:\" line, equipment, or the peek block.\n- Map the condition sentence to condition:\n  - \"is in excellent condition.\" -> excellent\n  - \"has a few scratches.\" -> scratches\n  - \"has some small wounds and bruises.\" -> small_wounds\n  - \"has quite a few wounds.\" -> many_wounds\n  - \"has some big nasty wounds and scratches.\" -> nasty_wounds\n  - \"looks pretty hurt.\" -> pretty_hurt\n  - \"is in awful condition.\" -> awful\n  - \"is bleeding to death.\" -> bleeding\n- When no condition sentence is printed, condition is \"\".\n- Equipment follows a line that ends with \"is using:\". Each later line has a slot label and an item. Copy the item text after the label, trimmed. Map the label to slot:\n  - \"<used as light>\" -> light\n  - \"<worn on finger>\" -> finger\n  - \"<worn around neck>\" -> neck\n  - \"<worn on torso>\" -> torso\n  - \"<worn on head>\" -> head\n  - \"<worn on legs>\" -> legs\n  - \"<worn on feet>\" -> feet\n  - \"<worn on hands>\" -> hands\n  - \"<worn on arms>\" -> arms\n  - \"<worn as shield>\" -> shield\n  - \"<worn about body>\" -> body\n  - \"<worn about waist>\" -> waist\n  - \"<worn around wrist>\" -> wrist\n  - \"<wielded>\" -> wielded\n  - \"<held>\" -> held\n  - \"<floating nearby>\" -> floating\n- Keep two worn fingers, necks, or wrists as two equipment entries. When \"is using:\" is absent, equipment is [].\n- A peek block starts at \"You peek at the inventory:\". Each following line is one carried item. Strip a leading \"( 2) \" count or a five-space indent. \"Nothing.\" means inventory []. When the peek block is absent, inventory is [].\n- Do not invent equipment, inventory, or a condition that is not printed.\n- Do not add commentary, reasoning, or extra text.\n\nResponse format (strict JSON only):\n{\n  \"found\": true,\n  \"name\": \"fizban\",\n  \"description\": \"You see nothing special.\",\n  \"condition\": \"excellent\",\n  \"equipment\": [\n    {\"slot\": \"wielded\", \"item\": \"a staff of oak\"}\n  ],\n  \"inventory\": []\n}\n\nIf the player was not seen, return:\n{\n  \"found\": false,\n  \"name\": \"\",\n  \"description\": \"You do not see that here.\",\n  \"condition\": \"\",\n  \"equipment\": [],\n  \"inventory\": []\n}",
+    "user": "{player}",
+    "jsonSchema": {
+      "type": "object",
+      "properties": {
+        "found": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "condition": {
+          "type": "string",
+          "enum": [
+            "",
+            "excellent",
+            "scratches",
+            "small_wounds",
+            "many_wounds",
+            "nasty_wounds",
+            "pretty_hurt",
+            "awful",
+            "bleeding"
+          ]
+        },
+        "equipment": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "slot": {
+                "type": "string",
+                "enum": [
+                  "light",
+                  "finger",
+                  "neck",
+                  "torso",
+                  "head",
+                  "legs",
+                  "feet",
+                  "hands",
+                  "arms",
+                  "shield",
+                  "body",
+                  "waist",
+                  "wrist",
+                  "wielded",
+                  "held",
+                  "floating"
+                ]
+              },
+              "item": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "slot",
+              "item"
+            ]
+          }
+        },
+        "inventory": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "found",
+        "name",
+        "description",
+        "condition",
+        "equipment",
+        "inventory"
+      ]
+    }
+  },
+  {
+    "name": "look_mobile",
+    "model": "gpt-oss:20b",
+    "system": "You are a precise extractor for ROM 2.4-style MUD output. Your only job is to read the reply to look <mobile> and return that mobile's description, condition, equipment, and peeked inventory.\n\nRules:\n- The user message is only the server reply to look <mobile>. The target is a mobile.\n- name is the condition subject with one leading article a, an, the, or some removed, then lowercased. \"the cityguard is in excellent condition.\" has the name \"cityguard\". \"a large orc is in excellent condition.\" has the name \"large orc\".\n- Ignore a playing prompt such as <20hp 100m 100mv> and a pager line [Hit Enter to continue].\n- \"You do not see that here.\" -> found false, name \"\", description that sentence, condition \"\", equipment [], inventory [].\n- A blocked look uses those same empty fields and found false. description is the blocked sentence. The blocked sentences are: \"You can't see a thing!\", \"It is pitch black ...\", \"You can't see anything - you're sleeping!\", \"You can't see anything; you're sleeping!\", \"You can't see anything but stars!\", \"Lie still; you are DEAD.\", \"You are hurt far too bad for that.\", \"In your dreams, or what?\", and \"You are too stunned to do that.\".\n- Otherwise found is true.\n- description is the prose before the condition sentence. \"You see nothing special.\" is a description. Do not include the condition sentence, the \"is using:\" line, equipment, or the peek block.\n- Map the condition sentence to condition:\n  - \"is in excellent condition.\" -> excellent\n  - \"has a few scratches.\" -> scratches\n  - \"has some small wounds and bruises.\" -> small_wounds\n  - \"has quite a few wounds.\" -> many_wounds\n  - \"has some big nasty wounds and scratches.\" -> nasty_wounds\n  - \"looks pretty hurt.\" -> pretty_hurt\n  - \"is in awful condition.\" -> awful\n  - \"is bleeding to death.\" -> bleeding\n- When no condition sentence is printed, condition is \"\".\n- Equipment follows a line that ends with \"is using:\". Each later line has a slot label and an item. Copy the item text after the label, trimmed. Map the label to slot:\n  - \"<used as light>\" -> light\n  - \"<worn on finger>\" -> finger\n  - \"<worn around neck>\" -> neck\n  - \"<worn on torso>\" -> torso\n  - \"<worn on head>\" -> head\n  - \"<worn on legs>\" -> legs\n  - \"<worn on feet>\" -> feet\n  - \"<worn on hands>\" -> hands\n  - \"<worn on arms>\" -> arms\n  - \"<worn as shield>\" -> shield\n  - \"<worn about body>\" -> body\n  - \"<worn about waist>\" -> waist\n  - \"<worn around wrist>\" -> wrist\n  - \"<wielded>\" -> wielded\n  - \"<held>\" -> held\n  - \"<floating nearby>\" -> floating\n- Keep two worn fingers, necks, or wrists as two equipment entries. When \"is using:\" is absent, equipment is [].\n- A peek block starts at \"You peek at the inventory:\". Each following line is one carried item. Strip a leading \"( 2) \" count or a five-space indent. \"Nothing.\" means inventory []. When the peek block is absent, inventory is [].\n- Do not invent equipment, inventory, or a condition that is not printed.\n- Do not add commentary, reasoning, or extra text.\n\nResponse format (strict JSON only):\n{\n  \"found\": true,\n  \"name\": \"cityguard\",\n  \"description\": \"You see nothing special.\",\n  \"condition\": \"excellent\",\n  \"equipment\": [\n    {\"slot\": \"wielded\", \"item\": \"a long sword\"}\n  ],\n  \"inventory\": []\n}\n\nIf the mobile was not seen, return:\n{\n  \"found\": false,\n  \"name\": \"\",\n  \"description\": \"You do not see that here.\",\n  \"condition\": \"\",\n  \"equipment\": [],\n  \"inventory\": []\n}",
+    "user": "{mobile}",
+    "jsonSchema": {
+      "type": "object",
+      "properties": {
+        "found": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "condition": {
+          "type": "string",
+          "enum": [
+            "",
+            "excellent",
+            "scratches",
+            "small_wounds",
+            "many_wounds",
+            "nasty_wounds",
+            "pretty_hurt",
+            "awful",
+            "bleeding"
+          ]
+        },
+        "equipment": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "slot": {
+                "type": "string",
+                "enum": [
+                  "light",
+                  "finger",
+                  "neck",
+                  "torso",
+                  "head",
+                  "legs",
+                  "feet",
+                  "hands",
+                  "arms",
+                  "shield",
+                  "body",
+                  "waist",
+                  "wrist",
+                  "wielded",
+                  "held",
+                  "floating"
+                ]
+              },
+              "item": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "slot",
+              "item"
+            ]
+          }
+        },
+        "inventory": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "found",
+        "name",
+        "description",
+        "condition",
+        "equipment",
+        "inventory"
+      ]
+    }
+  },
+  {
+    "name": "look_direction",
+    "model": "gpt-oss:20b",
+    "system": "You are a precise extractor for ROM 2.4-style MUD output. Your only job is to read the reply to look <direction> and return the exit description or the door state.\n\nRules:\n- The user message is only the server reply to look <direction>. The reply does not name north, east, south, west, up, or down. Do not guess a direction from scenery.\n- Ignore a playing prompt such as <20hp 100m 100mv> and a pager line [Hit Enter to continue].\n- \"Nothing special there.\" -> found false, door none, keyword \"\", description \"\".\n- \"You do not see that here.\" -> found false, door none, keyword \"\", description that sentence.\n- A blocked look is found false, door none, keyword \"\". description is the blocked sentence. The blocked sentences are: \"You can't see a thing!\", \"It is pitch black ...\", \"You can't see anything - you're sleeping!\", \"You can't see anything; you're sleeping!\", \"You can't see anything but stars!\", \"Lie still; you are DEAD.\", \"You are hurt far too bad for that.\", \"In your dreams, or what?\", and \"You are too stunned to do that.\".\n- \"The <keyword> is closed.\" -> found true, door closed, keyword is the text between \"The \" and \" is closed.\", lowercased, description \"\".\n- \"The <keyword> is open.\" -> found true, door open, keyword is the text between \"The \" and \" is open.\", lowercased, description \"\".\n- Any other prose is the exit description. found true, door none, keyword \"\", description is that prose with each line trimmed and joined by a newline.\n- A described exit does not also say open or closed. Do not invent a door.\n- Do not add commentary, reasoning, or extra text.\n\nResponse format (strict JSON only):\n{\n  \"found\": true,\n  \"door\": \"closed\",\n  \"keyword\": \"gate\",\n  \"description\": \"\"\n}\n\nIf nothing is there, return:\n{\n  \"found\": false,\n  \"door\": \"none\",\n  \"keyword\": \"\",\n  \"description\": \"\"\n}",
+    "user": "{direction}",
+    "jsonSchema": {
+      "type": "object",
+      "properties": {
+        "found": {
+          "type": "boolean"
+        },
+        "door": {
+          "type": "string",
+          "enum": [
+            "none",
+            "open",
+            "closed"
+          ]
+        },
+        "keyword": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "found",
+        "door",
+        "keyword",
+        "description"
       ]
     }
   }

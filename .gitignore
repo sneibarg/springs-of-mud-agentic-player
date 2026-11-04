@@ -226,5 +226,8 @@ working-memory.json
 # Gameplay transcript written by the output control command
 session.txt
 
+# Runtime log written when the process starts
+log/
+
 # Live working-memory reviews written by tests
 tests/output/

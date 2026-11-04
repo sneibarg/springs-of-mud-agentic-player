@@ -61,6 +61,7 @@ class TestMemoryReview(unittest.TestCase):
         self.assertEqual(document["players"][0]["auras"], ["Red Aura"])
         self.assertEqual(document["agenticPlayers"][0]["name"], "Marcus")
         self.assertEqual(document["rooms"][0]["exits"], ["north"])
+        self.assertEqual(document["rooms"][0]["items"], [])
         self.assertEqual(document["commands"][0]["helpText"], "Look around.")
         self.assertEqual(document["considers"][0]["verdict"], "no_match")
         self.assertNotIn("agentic_players", document)
@@ -123,6 +124,20 @@ class TestMemoryReview(unittest.TestCase):
         self.assertEqual(again, original)
         self.assertNotIn("savedAt", again)
         self.assertNotIn("id", again)
+
+    def test_a_sign_in_the_room_is_saved_with_the_session(self):
+        memory = WorkingMemory()
+        room = memory.remember_room("By the Temple Altar", description="You are by the altar. There is a sign on the wall.", exits=["south"], items=[{"name": "Sign", "line": "There is a sign on the wall.", "source": "description"}, {"name": "  "}, {"name": "pit", "line": "A pit for sacrifices is in front of the altar.", "source": "object"}, {"name": "sign", "line": "duplicate"}])
+        self.assertEqual([(item.name, item.line, item.source) for item in room.items], [("sign", "There is a sign on the wall.", "description"), ("pit", "A pit for sacrifices is in front of the altar.", "object")])
+        memory.remember_room("By the Temple Altar")
+        self.assertEqual(memory.room_named("by the temple altar").items[0].name, "sign")
+        knowledge = WorldKnowledge()
+        knowledge.room = RoomSnapshot(name="By the Temple Altar", description="You are by the altar. There is a sign on the wall.", exits=["south"])
+        memory.absorb_world(knowledge)
+        restored = WorkingMemory.from_collection(memory.to_collection("AgentJanky"))
+        sign = restored.room_named("By the Temple Altar").items[0]
+        self.assertEqual((sign.name, sign.line, sign.source), ("sign", "There is a sign on the wall.", "description"))
+        self.assertEqual(restored.to_collection("AgentJanky")["rooms"][0]["items"][1]["name"], "pit")
 
     def test_collection_document_rejects_a_blank_agent_name(self):
         with self.assertRaises(ValueError) as raised:

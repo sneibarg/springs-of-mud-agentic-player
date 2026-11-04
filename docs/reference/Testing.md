@@ -33,6 +33,7 @@ python -m unittest tests.test_gameplay_output
 python -m unittest tests.TestControlProtocol
 python -m unittest tests.TestControlServer
 python -m unittest tests.test_initial_bootstrap
+python -m unittest tests.test_logging
 python -m unittest tests.test_live_logon
 python -m unittest tests.test_live_working_memory
 python -m unittest tests.test_live_command_bootstrap.TestLiveCommandBootstrap.test_live_help_categories

@@ -8,7 +8,7 @@ class HelpLesson:
     """One help page and the Ollama exchange that read it.
 
     `prompt` is the completion body that was sent. `response` is the raw text
-    the model returned. The parsed topics are stored on world knowledge.
+    the model returned. The parsed topics stay on this lesson. Working memory keeps the help text.
     """
 
     command: str

@@ -24,10 +24,26 @@ class SessionBeing:
 
 
 @dataclass
+class SessionItem:
+    """One thing in a room the player can look at.
+
+    The fields are name, line, and source. name is the word used with look.
+    line is the text it came from. source is the string "object" for a
+    four-space line, or the string "description" when that text names the
+    thing, as in "There is a sign on the wall."
+    """
+
+    name: str
+    line: str = ""
+    source: str = ""
+
+
+@dataclass
 class SessionRoom:
     name: str
     description: str = ""
     exits: list[str] = field(default_factory=list)
+    items: list[SessionItem] = field(default_factory=list)
 
 
 @dataclass
@@ -40,9 +56,14 @@ class SessionCommand:
 class WorkingMemory:
     """Short-lived memory for one play session.
 
-    Command records are copied onto world knowledge when command bootstrap
-    finishes. The other sections stay on this session. Call `clear` when the
-    session ends. `to_collection` is the body for PUT /api/v1/agent-memory/{agentName}.
+    When `bootstrap.defer` is false, categories, model help text, and
+    look-prompt items stay here and are not copied onto world knowledge.
+    When it is true, bootstrap does not ask Ollama. Server help is stored
+    on world knowledge instead.
+    The other sections stay on this session. Room items, including a
+    sign named in the description, stay on the session room. After this
+    document is saved, later play reads those items from memory. Call `clear`
+    when the session ends. `to_collection` is the body for PUT /api/v1/agent-memory/{agentName}.
     `from_collection` restores that document. `write_collection` copies the
     session into the local Memories fixture.
     """
@@ -80,7 +101,8 @@ class WorkingMemory:
     def note_aggressive(self, name: str, *, room_name: str = "") -> SessionBeing:
         return self.remember_mobile(name, room_name=room_name, aggressive=True)
 
-    def remember_room(self, name: str, *, description: str = "", exits: list[str] | None = None) -> SessionRoom:
+    def remember_room(self, name: str, *, description: str = "", exits: list[str] | None = None, items: list | None = None) -> SessionRoom:
+        """Remember one room. Passing items replaces the stored list. Omitting items leaves it."""
         cleaned = name.strip()
         if not cleaned:
             raise ValueError("A session room needs a name")
@@ -94,6 +116,8 @@ class WorkingMemory:
             room.description = description
         if exits:
             room.exits = list(exits)
+        if items is not None:
+            room.items = _session_items(items)
         return room
 
     def room_named(self, name: str) -> SessionRoom | None:
@@ -264,7 +288,7 @@ class WorkingMemory:
                 memory.note_aggressive(str(item.get("name")), room_name=str(item.get("room_name", "") or ""))
         for item in payload.get("rooms") or []:
             if isinstance(item, dict) and str(item.get("name", "")).strip():
-                memory.remember_room(str(item.get("name")), description=str(item.get("description", "") or ""), exits=[str(exit_name) for exit_name in item.get("exits") or []])
+                memory.remember_room(str(item.get("name")), description=str(item.get("description", "") or ""), exits=[str(exit_name) for exit_name in item.get("exits") or []], items=item.get("items") if isinstance(item.get("items"), list) else None)
         for item in payload.get("commands") or []:
             if isinstance(item, dict) and str(item.get("name", "")).strip():
                 memory.remember_command(str(item.get("name")), category=str(item.get("category", "") or ""), help_text=str(item.get("help_text", "") or ""))
@@ -385,6 +409,34 @@ def _restore_consider(memory: WorkingMemory, item) -> None:
         return
     text = str(item.get("text", "") or "")
     memory.remember_consider(target, text.splitlines(), kind=kind, agentic=agentic)
+
+
+def _session_items(items) -> list[SessionItem]:
+    """Keep one record per look keyword. A blank name is dropped."""
+    stored: list[SessionItem] = []
+    seen: set[str] = set()
+    if not isinstance(items, list):
+        return stored
+    for item in items:
+        session_item = _session_item(item)
+        if session_item is None or session_item.name in seen:
+            continue
+        seen.add(session_item.name)
+        stored.append(session_item)
+    return stored
+
+
+def _session_item(item) -> SessionItem | None:
+    if isinstance(item, SessionItem):
+        name, line, source = item.name, item.line, item.source
+    elif isinstance(item, dict):
+        name, line, source = item.get("name", ""), item.get("line", ""), item.get("source", "")
+    else:
+        return None
+    cleaned = str(name or "").strip().lower()
+    if not cleaned:
+        return None
+    return SessionItem(name=cleaned, line=str(line or "").strip(), source=str(source or "").strip().lower())
 
 
 def _copied_auras(record) -> list[str]:

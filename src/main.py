@@ -141,7 +141,7 @@ def _begin_play(account: AccountSession, registry, agent, config, memory, memory
                         knowledge.to_document(character_id=character.id, character_name=character.name,
                                               agent_name=agent.name))
 
-    knowledge = Bootstrapper(account.session, [item.character_name for item in registry.all()], character.name, memory=memory, replace_existing=config.telnet_replace_existing, on_commands=publish, prompts=_load_prompts(config, account.auth_client), ollama=OllamaClient(config.ollama_base_url, path=config.ollama_path)).bootstrap()
+    knowledge = Bootstrapper(account.session, [item.character_name for item in registry.all()], character.name, memory=memory, replace_existing=config.telnet_replace_existing, on_commands=publish, prompts=_load_prompts(config, account.auth_client), ollama=OllamaClient(config.ollama_base_url, path=config.ollama_path), defer=config.defer_bootstrap).bootstrap()
     memory.absorb_world(knowledge)
     _save_knowledge(config, account.auth_client, character.id,
                     knowledge.to_document(character_id=character.id, character_name=character.name,
@@ -213,12 +213,29 @@ def _save_knowledge(config: AgentConfig, auth_client: AuthClient, character_id: 
         print(f"World knowledge was not saved: {exc}", file=sys.stderr)
 
 
+def configure_logging(log_directory: str) -> str:
+    """Write INFO logs to `agent.log` in `log_directory`. Returns that file path."""
+    os.makedirs(log_directory, exist_ok=True)
+    log_file = os.path.join(log_directory, "agent.log")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s", handlers=[logging.FileHandler(log_file, encoding="utf-8"), logging.StreamHandler()], force=True)
+    logger.info("Log file %s.", log_file)
+    return log_file
+
+
+def _log_directory(config_path: str) -> str:
+    parent = os.path.dirname(os.path.abspath(config_path))
+    if os.path.basename(parent) == "resources":
+        parent = os.path.dirname(parent)
+    return os.path.join(parent, "log")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Connect a Springs of MUD agentic player.")
     parser.add_argument("--config", default=default_config_path(), help="Path to agent.yml")
     parser.add_argument("--agent", help="Agent name from SOMDB.Agents")
     parser.add_argument("--list", action="store_true", help="List agents and exit")
     args = parser.parse_args(argv)
+    configure_logging(_log_directory(args.config))
 
     config = AgentConfig.load(args.config)
     print(f"Agent config: {config}", flush=True)

@@ -22,7 +22,7 @@ python -m main --list
 python -m main --agent example-agent
 ```
 
-The process starts idle and listens on `127.0.0.1:9711`. `bootstrap.initial` in `resources/agent.yml` connects the saved account for that agent, logs on its character, and runs bootstrap before waiting for control commands. From another shell, send one command at a time:
+The process starts idle, writes `log/agent.log` beside the repository, and listens on `127.0.0.1:9711`. `bootstrap.initial` in `resources/agent.yml` connects the saved account for that agent, logs on its character, and runs bootstrap before waiting for control commands. From another shell, send one command at a time:
 
 ```powershell
 $env:PYTHONPATH = "src"

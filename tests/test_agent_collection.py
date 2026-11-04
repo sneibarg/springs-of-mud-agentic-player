@@ -49,6 +49,7 @@ class TestAgentCollection(unittest.TestCase):
         self.assertEqual(config.control_host, "127.0.0.1")
         self.assertEqual(config.control_port, 9711)
         self.assertTrue(config.initial_bootstrap)
+        self.assertTrue(config.defer_bootstrap)
 
     def test_duplicate_name_is_rejected(self):
         document = {"_id": {"$oid": "66f0a1b2c3d4e5f607182931"}, "name": "Guide", "accountName": "account", "characterName": "Guide"}
@@ -95,6 +96,12 @@ class TestAgentCollection(unittest.TestCase):
             with self.assertRaises(ValueError) as caught:
                 AgentConfig.load(str(path))
             self.assertEqual(str(caught.exception), "bootstrap.initial must be a boolean")
+            path.write_text("auth:\n  base_url: http://dragon:8169\n  login_path: /api/auth/login\nbootstrap:\n  defer: \"later\"\n", encoding="utf-8")
+            with self.assertRaises(ValueError) as deferred:
+                AgentConfig.load(str(path))
+            self.assertEqual(str(deferred.exception), "bootstrap.defer must be a boolean")
+            path.write_text("auth:\n  base_url: http://dragon:8169\n  login_path: /api/auth/login\n", encoding="utf-8")
+            self.assertFalse(AgentConfig.load(str(path)).defer_bootstrap)
 
 
 if __name__ == "__main__":

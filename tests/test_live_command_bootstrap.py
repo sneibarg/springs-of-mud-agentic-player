@@ -111,15 +111,14 @@ class TestLiveCommandBootstrap(unittest.TestCase):
                 if item.error or entry.get("parseError"):
                     failures.append(f"{item.command}: {item.error or entry.get('parseError')}")
                     continue
-                stored = bootstrapper.knowledge.help_for(item.command)
-                self.assertIsNotNone(stored, item.command)
-                self.assertIsNotNone(remembered, item.command)
-                self.assertEqual(stored.missing, entry["parsed"]["missing"])
-                if stored.missing:
+                parsed, parse_error = item.parsed_help()
+                self.assertIsNotNone(parsed, parse_error or item.command)
+                self.assertEqual(parsed["missing"], entry["parsed"]["missing"])
+                if parsed["missing"]:
                     self.assertEqual(remembered.help_text, "")
                 else:
                     self.assertTrue(remembered.help_text.strip(), item.command)
-                    self.assertTrue(stored.topics, item.command)
+                    self.assertTrue(parsed["topics"], item.command)
             self.assertFalse(uncategorized, "uncategorized: " + ", ".join(uncategorized))
             self.assertFalse(failures, "\n".join(failures))
 

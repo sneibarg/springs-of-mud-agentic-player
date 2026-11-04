@@ -26,6 +26,7 @@ class AgentConfig:
     control_host: str
     control_port: int
     initial_bootstrap: bool
+    defer_bootstrap: bool
 
     @classmethod
     def load(cls, path: str) -> "AgentConfig":
@@ -77,8 +78,11 @@ class AgentConfig:
         initial_bootstrap = bootstrap.get("initial", False)
         if not isinstance(initial_bootstrap, bool):
             raise ValueError("bootstrap.initial must be a boolean")
+        defer_bootstrap = bootstrap.get("defer", False)
+        if not isinstance(defer_bootstrap, bool):
+            raise ValueError("bootstrap.defer must be a boolean")
 
-        return cls(auth_base_url=auth_base_url, login_path=login_path, telnet_host=str(telnet.get("host", "localhost")), telnet_port=int(telnet.get("port", 6969)), telnet_replace_existing=replace_existing, api_base_url=api_base_url, agents_path=_api_path(api.get("agents_path", "/api/v1/agents")), prompts_path=_api_path(api.get("prompts_path", "/api/v1/agent-prompts")), memory_path=_api_path(api.get("memory_path", "/api/v1/agent-memory")), knowledge_path=_api_path(knowledge.get("path", "/api/v1/agent-knowledge")), ollama_base_url=str(ollama.get("base_url", "http://localhost:9081")).rstrip("/"), ollama_path=str(ollama.get("path", "/ollama/completions")), database=database, collection_name=collection_name, collection_path=collection_path, connections_path=connections_path, control_host=control_host, control_port=control_port, initial_bootstrap=initial_bootstrap)
+        return cls(auth_base_url=auth_base_url, login_path=login_path, telnet_host=str(telnet.get("host", "localhost")), telnet_port=int(telnet.get("port", 6969)), telnet_replace_existing=replace_existing, api_base_url=api_base_url, agents_path=_api_path(api.get("agents_path", "/api/v1/agents")), prompts_path=_api_path(api.get("prompts_path", "/api/v1/agent-prompts")), memory_path=_api_path(api.get("memory_path", "/api/v1/agent-memory")), knowledge_path=_api_path(knowledge.get("path", "/api/v1/agent-knowledge")), ollama_base_url=str(ollama.get("base_url", "http://localhost:9081")).rstrip("/"), ollama_path=str(ollama.get("path", "/ollama/completions")), database=database, collection_name=collection_name, collection_path=collection_path, connections_path=connections_path, control_host=control_host, control_port=control_port, initial_bootstrap=initial_bootstrap, defer_bootstrap=defer_bootstrap)
 
 
 def _api_path(value: object) -> str:

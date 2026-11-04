@@ -54,11 +54,21 @@ class BeingRecord:
 
 
 @dataclass
+class RoomItem:
+    """One named item from a room look, with the line it came from and its source."""
+
+    name: str
+    line: str = ""
+    source: str = ""
+
+
+@dataclass
 class RoomSnapshot:
     name: str = ""
     description: str = ""
     exits: list[str] = field(default_factory=list)
     item_lines: list[str] = field(default_factory=list)
+    items: list[RoomItem] = field(default_factory=list)
 
 
 @dataclass
@@ -144,7 +154,9 @@ class WorldKnowledge:
         room = knowledge.room
         items = len(room.item_lines) if room is not None else 0
         room_name = room.name.strip() if room is not None and room.name else ""
-        text = f"Knowledge: {len(knowledge.help_topics)} help, {len(knowledge._commands)} commands, {len(knowledge.areas)} areas, {len(knowledge.mobiles)} mobiles, {len(knowledge.npcs)} npcs, {len(knowledge.players)} players, {items} items."
+        topics = sum(len(topic.topics) for topic in knowledge.help_topics.values())
+        categorized = sum(1 for command in knowledge._commands.values() if str(command.category or "").strip())
+        text = f"Knowledge: {len(knowledge.help_topics)} help, {topics} topics, {len(knowledge._commands)} commands, {categorized} categorized, {len(knowledge.areas)} areas, {len(knowledge.mobiles)} mobiles, {len(knowledge.npcs)} npcs, {len(knowledge.players)} players, {items} items."
         if room_name:
             return f"{text}\nCurrent room: {room_name}"
         return text
@@ -180,7 +192,7 @@ class WorldKnowledge:
         """CamelCase snapshot for PUT /api/v1/agent-knowledge/{characterId}."""
         room = None
         if self.room is not None:
-            room = {"name": self.room.name, "description": self.room.description, "exits": list(self.room.exits), "itemLines": list(self.room.item_lines)}
+            room = {"name": self.room.name, "description": self.room.description, "exits": list(self.room.exits), "itemLines": list(self.room.item_lines), "items": [{"name": item.name, "line": item.line, "source": item.source} for item in self.room.items]}
         commands = [{"name": command.name, "category": command.category, "helpText": command.help_text} for command in (self._commands[key] for key in self._command_order)]
         return {"characterId": character_id, "characterName": character_name, "agentName": agent_name, "loginLines": list(self.login_lines), "helpTopics": [{"command": topic.command, "keyword": topic.keyword, "text": topic.text, "raw": topic.raw, "missing": topic.missing, "topics": [{"keyword": article.keyword, "text": article.text} for article in topic.topics]} for topic in _sorted_values(self.help_topics)], "commands": commands, "areas": [{"name": area.name, "author": area.author, "levelRange": area.level_range} for area in _sorted_values(self.areas)], "mobiles": [_being_document(being) for being in _sorted_beings(self.mobiles)], "npcs": [_being_document(being) for being in _sorted_beings(self.npcs)], "players": [_player_document(player) for player in _sorted_values(self.players)], "room": room}
 
@@ -212,7 +224,7 @@ class WorldKnowledge:
                 knowledge.remember_player(player)
         room = payload.get("room")
         if isinstance(room, dict):
-            knowledge.room = RoomSnapshot(name=str(room.get("name", "") or ""), description=str(room.get("description", "") or ""), exits=[str(exit_name) for exit_name in room.get("exits") or []], item_lines=[str(line) for line in room.get("item_lines") or []])
+            knowledge.room = RoomSnapshot(name=str(room.get("name", "") or ""), description=str(room.get("description", "") or ""), exits=[str(exit_name) for exit_name in room.get("exits") or []], item_lines=[str(line) for line in room.get("item_lines") or []], items=[RoomItem(name=str(item.get("name", "") or ""), line=str(item.get("line", "") or ""), source=str(item.get("source", "") or "")) for item in room.get("items") or [] if isinstance(item, dict) and str(item.get("name", "") or "").strip()])
         return knowledge
 
 
