@@ -129,7 +129,7 @@ The first rule that matches is the whole step. The engine does not ask the model
 2. **Leave a threat.** An aggressive mobile is in this room and we did not start that fight. Send an exit we have not taken. Send `flee` only when the observer says we are in the fight.
 3. **Stand.** A speech or movement command was refused because the character is asleep, resting, or sitting. Send `stand`.
 4. **Answer.** A `SocialConnection` is `pending`. Send one reply, then clear `pending`. A tell is answered with `reply` when that command is known, otherwise `tell <name> <text>`. A say that names us is answered with `say <text>` in the room.
-5. **Greet.** The room has a player whose standing is `unknown` or `noticed`, and no rule above matched. Agentic players come first, then other players. One greeting. NPCs are not greeted in version 1. Mobiles are not greeted. A player with standing `avoid` is not greeted.
+5. **Greet.** The room has a player whose standing is `unknown` or `noticed`, and no rule above matched. Agentic players come first, then other players. One greeting. NPCs are not greeted in version 1. Mobiles are not greeted. A player with standing `avoid` is not greeted. When `resources/agent.yml` has a `personality` section, `docs/proposals/Personality.md` decides whether this greeting runs and whether it takes a step before a later strategy child. With no such section, this rule stays.
 6. **See the room.** This room has no session record yet. Send `look`. Run the same room parse `WorldReader` uses. When `play.defer` is false and the look prompts and an Ollama client exist, the look, items, exits, and mobs prompts may be sent the way bootstrap sends them, and the items stay on the session room. When `play.defer` is true, store the server text and skip those calls.
 7. **See who is on.** No `who` has been sent this play, or `play.who_every` steps have passed (default 20). Send `who`. Update knowledge player identities and session beings. An agentic name is still one that matches an agent document.
 8. **Move.** Send an exit from this room that this process has not taken. Remember the attempt on the engine, keyed by room name. The destination is unknown until the next `look`, so the tried exit is process-local in version 1. A closed door is left for the later `open` phase. `look_direction` already knows how to read that reply.
@@ -187,7 +187,7 @@ With `play.defer` false and a `greet` prompt loaded, the model returns the words
 
 A tell is answered from the `reply` prompt the same way. The template, when the model is not used, is `reply Hello, <name>.` or `tell <name> Hello.` when `reply` is not known.
 
-`Agent.description` is the voice hint inside those prompts. The prompt must tolerate a one-sentence description. A richer persona is an agent-document change, done when someone edits that collection, not by the engine inventing fields.
+`Agent.description` is the voice hint inside those prompts. The prompt must tolerate a one-sentence description. A richer persona is an agent-document change, done when someone edits that collection, not by the engine inventing fields. When a personality is installed, the templates and the `nod` greeting in `docs/proposals/Personality.md` replace this section's fixed lines. The description is still the voice hint, and it is still not sent with the `description` command.
 
 ## play.defer
 
@@ -246,7 +246,7 @@ Do not save knowledge from a newly constructed empty `WorldKnowledge`. The engin
 
 `AgentConfig` gains `defer_play` and the integers `flee_hp`, `social_every`, `who_every`, and `save_every`. The integers have the defaults above. A non-integer raises the same kind of `ValueError` the port already raises.
 
-No new package. The engine is play, the bond is memory.
+The engine is play and the bond is memory. A `personality` section uses the package in `docs/proposals/Personality.md`. With no such section, no package is added.
 
 ## Phases
 
@@ -256,7 +256,7 @@ Each phase is playable on its own and has unit tests with a fake channel. The li
 2. **Bonds.** `SocialConnection` on working memory, tell and named-say detection, one template greeting, one template reply, agentic players first, no second greeting, NPC tells stored without `pending`. Tests use server-shaped lines from the command catalog. `play.defer` true sends no Ollama request.
 3. **Voice.** `greet` and `reply` prompts when `play.defer` is false. A missing prompt uses the phase 2 template. The model returns words. The engine supplies `say` or `reply`.
 4. **Mobs.** `consider` before any `kill`. Outlook `safe` or `even` may `kill` a mobile. `risky`, `fatal`, `unknown`, and a refusal do not. Prompt hit points at or below `play.flee_hp` send `flee`. An aggressive mobile we did not attack is left by an exit. Death and flee lines come from a fixture taken from the server messages.
-5. **Company.** `follow` and `group` with a player already at standing `talking` or `grouped`, agentic first. Success sets `grouped`. `gtell` stays out until group membership is observable from a server line we have pinned.
+5. **Company.** `follow` an agentic player already at standing `talking`. `group` is sent only after `<Name> now follows you.` Grouping a player we ourselves follow is refused with `%t isn't following you.` or `But you are following someone else!` A group success sets `grouped`. `gtell` stays out until group membership is observable from a server line we have pinned. When a personality is installed, only company `companion` sends these, on the openings in `docs/proposals/Personality.md`. With no personality section, this phase sends them.
 
 ## Tests
 

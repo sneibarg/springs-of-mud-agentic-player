@@ -265,9 +265,9 @@ Risk for enchant, because the spell can destroy the item:
 
 `GearStrategy` subclasses `Strategy`. `direct(view, command_catalog, gear_catalog)` returns one `Directive` or nothing. The level algorithm's signature stays `direct(view, command_catalog)`. The context passes the gear catalog only to a strategy that accepts it. `LevelStrategy` does not wear, compare, or cast. The one gear fact it reads is `gear_gate` on the view, from the gear-level section.
 
-The composition root installs a `SequenceStrategy` when more than one goal is configured. `SequenceStrategy` is a `Strategy` whose `direct` calls each child in config order and returns the first directive. One field on the engine still holds a `Strategy`. The loop still does not name `LevelStrategy` or `GearStrategy`.
+The composition root installs a `SequenceStrategy` when more than one goal is configured, and when `PracticeStrategy` is installed beside a goal. `SequenceStrategy` is a `Strategy` whose `direct` calls each child in config order and returns the first directive. One field on the engine still holds a `Strategy`. The loop still does not name `LevelStrategy`, `PracticeStrategy`, or `GearStrategy`.
 
-Order inside that sequence is the level goal first, then gear goals in the order written. While the level algorithm returns a hunt, a flee, or a rest, gear waits. Gear uses the step when the level algorithm returns nothing: the goal is met, the pace is ahead, the room has nothing to fight, or there is no level goal. One command per step still holds. A gear survey does not run during a fight the level strategy is holding.
+Order inside that sequence is the level goal first, then gear goals in the order written. `docs/proposals/Practice.md` inserts `PracticeStrategy` after level and before gear when that strategy is installed. While the level algorithm returns a hunt, a flee, or a rest, later children wait. Gear uses the step when every child before it returns nothing. One command per step still holds. A gear survey does not run during a fight the level strategy is holding.
 
 `GearStrategy.direct` returns the first match. `allow_social` is false whenever it returns a directive.
 
@@ -290,8 +290,8 @@ The directive roles add `equip`, `cast`, and `question` to the set in the strate
 
 1. Drain and observe. Gear parsers update `WorkingMemory` before any strategy runs.
 2. Danger, leave-threat, stand, and an owed reply. Unchanged, and still ahead of every strategy.
-3. `strategy.direct(...)`. A sequence asks level, then gear.
-4. Greeting when every strategy returns nothing.
+3. `strategy.direct(...)`. A sequence asks level, then gear. When `PracticeStrategy` is installed, it is asked after level and before gear, as `docs/proposals/Practice.md` describes. When a personality is installed, `docs/proposals/Personality.md` may return a speak directive after the level child yields and before practice and gear are asked. A level hunt, flee, or rest is still returned as the level child wrote it. A gear `question` is still the gear line, and manner does not rewrite it.
+4. Greeting when every strategy returns nothing and no personality is installed. A personality's speak directive is that greeting, on the opening that proposal names.
 5. Wait.
 
 A gear question does not skip an owed tell. A `compare` does not skip a flee.
@@ -335,7 +335,7 @@ A gear question does not skip an owed tell. A `compare` does not skip a flee.
 - Cautious enchant returns nothing when the only candidate is a spare. Steady returns `cast enchant weapon <keyword>` for that spare. The directive's category is `combat`.
 - `cast` filed under a category other than `combat` is not sent.
 - A help-only knowledge command list does not make `compare` available. That is the memory proposal's `known_commands` rule.
-- `SequenceStrategy` returns the level directive when the level child returns `kill`, and returns `compare` when the level child returns nothing.
+- `SequenceStrategy` with level then gear returns the level directive when the level child returns `kill`, and returns `compare` when the level child returns nothing. A sequence that also has practice is covered in `docs/proposals/Practice.md`.
 - `look` on another player stores location `other` and `ask_next` returns that player once.
 - `You do not have that item.` does not create a piece.
 - `glows blue` sets `enchant` to `success`. `shivers violently and explodes` sets `destroyed`. Neither sets `comparison`.
@@ -355,7 +355,7 @@ A gear question does not skip an owed tell. A `compare` does not skip a flee.
 - A player's claim can be wrong. The replace goal ignores it until our own `compare` agrees.
 - `identify` also prints affect bonuses, weight, and value. This proposal reads `Weapon type is <type>.`, `level is <n>`, and the `anti good`, `anti evil`, and `anti neutral` phrases from that page. Affect, weight, and value text stay unused. The glow is still not a skill percent and still not a new object level. `bless` and `curse` are not cast, and a holy or malevolent aura does not change `rejects`.
 - A weapon type guessed from the short description is not stored. A staff that uses the spear skill stays untyped until identify says `spear`.
-- `practice <skill>` can raise a percent. This proposal never sends that form, so a clumsy sword stays clumsy until some other session spends the practice.
+- `practice <skill>` can raise a percent. This proposal never sends that form. `docs/proposals/Practice.md` is the session that does, and only for a name on the optimal or preference list that is still below adept. A clumsy sword is not practiced merely because the wield band was clumsy.
 - `remove` is absent from the SUMMARY fallback. A worn piece cannot be enchanted on a character whose command list does not include `remove`, except by the steady path that enchants a spare already in the inventory.
 - The area list and command categories are unchanged. The level clock's pace, `met`, and notch stay on the configured target. `gear_gate` extends an open-ended hunt and does not raise the notch. A budgeted goal that is already met does not keep hunting for a locked piece. A rejected alignment does not extend the hunt and does not choose which mobile to kill. Shop `list` prints an object level, and this proposal does not send `list` or `buy`.
 - Giving, buying, and sacrificing gear are later actions. The objects category already contains `give`, `buy`, and `sacrifice`. No preference list here selects them.

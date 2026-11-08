@@ -144,7 +144,7 @@ The engine's danger rule remains the floor at `play.flee_hp` and runs before `di
 5. Stand after a position refusal.
 6. Answer a pending tell or a say that names us.
 7. `strategy.direct(view, catalog)`. Perform the directive when it returns one.
-8. When `direct` returns nothing: the engine greeting, under `play.social_every`.
+8. When `direct` returns nothing: the engine greeting, under `play.social_every`. When a personality is installed, that greeting is the disposition in `docs/proposals/Personality.md`, and a yield means the disposition declined.
 9. Wait.
 
 Rules 3 through 6 stay on the engine. They are not a strategy. The strategy does not call back into the engine.
