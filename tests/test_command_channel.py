@@ -75,6 +75,18 @@ class TestCommandChannel(unittest.TestCase):
             channel.read_until_prompt()
         self.assertEqual(client.sent, ["N"])
 
+    def test_drain_returns_queued_lines_and_keeps_the_prompt(self):
+        client = _QueueClient()
+        client.pending = ["Marcus tells you 'Hello.'", "<20hp 100m 100mv>", "[Hit Enter to continue]"]
+        client.on_send[""] = ["The rest of the page."]
+        channel = self._channel(client)
+
+        lines = channel.drain()
+
+        self.assertEqual(lines, ["Marcus tells you 'Hello.'", "The rest of the page."])
+        self.assertEqual(channel.last_prompt, "<20hp 100m 100mv>")
+        self.assertEqual(client.sent, [""])
+
     def test_exchange_without_a_prompt_raises(self):
         client = _QueueClient()
         client.on_send["look"] = ["partial"]

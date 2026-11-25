@@ -100,6 +100,35 @@ class TestPlayerControl(unittest.TestCase):
             release.set()
             self._finish(control, lines, driver)
 
+    def test_steps_run_while_play_and_stop_when_idle(self):
+        lines = queue.Queue()
+        replies = []
+        control = PlayerControl(reader=lambda: _next_line(lines), writer=replies.append)
+        opened = []
+        steps = []
+
+        def on_step():
+            steps.append(control.mode)
+            return False
+
+        control.start()
+        driver = threading.Thread(target=lambda: control.drive(lambda: opened.append("play"), on_step=on_step, wait_s=0.05), name="session")
+        driver.start()
+        try:
+            lines.put("play")
+            self.assertTrue(_wait_for(lambda: len(steps) >= 2))
+            self.assertEqual(opened, ["play"])
+            held = len(steps)
+            lines.put("idle")
+            self.assertTrue(_wait_for(lambda: control.mode == PlayerControl.IDLE))
+            time.sleep(0.15)
+            self.assertEqual(len(steps), held)
+            lines.put("play")
+            self.assertTrue(_wait_for(lambda: len(steps) > held))
+            self.assertEqual(opened, ["play"])
+        finally:
+            self._finish(control, lines, driver)
+
     def test_bootstrap_runs_again_on_the_caller_thread(self):
         lines = queue.Queue()
         replies = []

@@ -22,6 +22,7 @@ Open a reference when the work touches that area.
 - First login: command order, help, when bootstrap runs, and the control `bootstrap` command ([First Login Knowledge](docs/reference/Bootstrap.md)).
 - Knowledge load and save, the document fields, and a failed save ([World Knowledge API](docs/reference/WorldKnowledge.md)).
 - The control socket, the command grammar, and idle, play, and bootstrap ([Operator Control](docs/reference/OperatorControl.md)).
+- The observe-decide-act step and the Knowledge Machine calls through som-nlp-service ([Play](docs/reference/Play.md)).
 - Session memory: beings, commands, considers, conversations, and what is saved ([Working Memory](docs/reference/WorkingMemory.md)).
 - Prompt fixtures, score intent tokens, and the Ollama completion body ([Prompts](docs/reference/Prompts.md)).
 - Which tests to run, including the live logon, memory, and command-bootstrap tests ([Testing](docs/reference/Testing.md)).

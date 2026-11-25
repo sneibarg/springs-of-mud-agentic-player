@@ -1,5 +1,6 @@
 import logging
 import threading
+import time
 
 from typing import Callable, Optional
 
@@ -18,9 +19,12 @@ class PlayerControl:
     `handle` accepts `idle`, `play`, `bootstrap`, `memory`, `output`, `connect`,
     `list`, and `logon`. The production caller is the localhost control socket.
     `start` reads the same commands from an injected reader. The mode changes
-    for `idle` and `play`. `drive` runs on the caller thread and invokes
-    `on_play` once, the first time the mode is play. `bootstrap` asks that
-    same thread to bootstrap again. `connect` logs in a saved account.
+    for `idle` and `play`. `drive` runs on the caller thread. It invokes
+    `on_play` once, the first time the mode is play, then `on_step` while the
+    mode stays play. `idle` stops the steps and leaves the session connected.
+    A later `play` steps again and does not call `on_play` again. `bootstrap`
+    asks that same thread to bootstrap again, and that iteration does not
+    step. `connect` logs in a saved account.
     `logon` accepts only a character from that account. `memory`, `output`,
     and `bootstrap` do not change the mode.
     """
@@ -83,8 +87,8 @@ class PlayerControl:
         if self._thread is not None:
             self._thread.join(timeout)
 
-    def drive(self, on_play: Callable[[], None], *, on_bootstrap: Optional[Callable[[], None]] = None, connected: Callable[[], bool] = lambda: True, wait_s: float = 0.2) -> None:
-        """Block until stop or disconnect. `on_play` runs on this thread, once. `on_bootstrap` runs each time bootstrap is requested."""
+    def drive(self, on_play: Callable[[], None], *, on_bootstrap: Optional[Callable[[], None]] = None, on_step: Optional[Callable[[], object]] = None, connected: Callable[[], bool] = lambda: True, wait_s: float = 0.2) -> None:
+        """Block until stop or disconnect. `on_play` runs on this thread, once. `on_step` then runs while the mode is play. `on_bootstrap` runs each time bootstrap is requested."""
         played = False
         while True:
             with self._condition:
@@ -92,7 +96,8 @@ class PlayerControl:
                     return
                 requested = self._bootstrap_requested
                 should_play = self._mode == self.PLAY and not played
-                if not requested and not should_play:
+                should_step = self._mode == self.PLAY and played and on_step is not None
+                if not requested and not should_play and not should_step:
                     self._condition.wait(wait_s)
                     continue
                 if requested:
@@ -101,8 +106,13 @@ class PlayerControl:
                 if on_bootstrap is not None:
                     on_bootstrap()
                 continue
-            on_play()
-            played = True
+            if should_play:
+                on_play()
+                played = True
+                continue
+            acted = bool(on_step())
+            if not acted:
+                time.sleep(wait_s)
 
     def _listen(self) -> None:
         try:

@@ -28,6 +28,10 @@ python -m unittest tests.test_memory_client
 python -m unittest tests.test_prompt_tokenizer
 python -m unittest tests.test_prompt_client
 python -m unittest tests.test_ollama_client
+python -m unittest tests.test_km_client
+python -m unittest tests.TestKmPlayer
+python -m unittest tests.test_level_question
+python -m unittest tests.test_gameplay_engine
 python -m unittest tests.test_player_control
 python -m unittest tests.test_gameplay_output
 python -m unittest tests.TestControlProtocol

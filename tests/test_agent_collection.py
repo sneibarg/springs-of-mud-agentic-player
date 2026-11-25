@@ -103,6 +103,32 @@ class TestAgentCollection(unittest.TestCase):
             path.write_text("auth:\n  base_url: http://dragon:8169\n  login_path: /api/auth/login\n", encoding="utf-8")
             self.assertFalse(AgentConfig.load(str(path)).defer_bootstrap)
 
+    def test_km_bridge_defaults_to_the_nlp_service(self):
+        config = AgentConfig.load(str(ROOT / "resources" / "agent.yml"))
+        self.assertEqual(config.km_base_url, config.ollama_base_url)
+        self.assertEqual(config.km_query_path, "/km/query")
+        self.assertEqual(config.km_assertions_path, "/km/assertions")
+        self.assertEqual(config.km_baseline_path, "/km/baseline")
+        self.assertIsNone(config.level_goal)
+
+    def test_goal_and_km_settings_are_read(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "agent.yml"
+            path.write_text("auth:\n  base_url: http://dragon:8169\n  login_path: /api/auth/login\nkm:\n  base_url: http://dragon:9081/\n  baseline_path: /km/baseline\ngoal:\n  level: 5\n  risk: cautious\n  minutes: 0\n", encoding="utf-8")
+            config = AgentConfig.load(str(path))
+            self.assertEqual(config.km_base_url, "http://dragon:9081")
+            self.assertEqual(config.level_goal.target_level, 5)
+            self.assertEqual(config.level_goal.risk, "cautious")
+            self.assertEqual(config.level_goal.minutes, 0)
+            path.write_text("auth:\n  base_url: http://dragon:8169\n  login_path: /api/auth/login\ngoal:\n  level: 0\n", encoding="utf-8")
+            with self.assertRaises(ValueError) as caught:
+                AgentConfig.load(str(path))
+            self.assertEqual(str(caught.exception), "goal.level must be an integer of 1 or more")
+            path.write_text("auth:\n  base_url: http://dragon:8169\n  login_path: /api/auth/login\ngoal:\n  level: 2\n  risk: wild\n", encoding="utf-8")
+            with self.assertRaises(ValueError) as risk:
+                AgentConfig.load(str(path))
+            self.assertEqual(str(risk.exception), "goal.risk must be cautious, steady, or bold")
+
 
 if __name__ == "__main__":
     unittest.main()

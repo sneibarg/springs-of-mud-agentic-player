@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from agent.AgentCollection import AgentCollection
+from play.LevelGoal import LevelGoal
 
 
 @dataclass(frozen=True)
@@ -27,6 +28,12 @@ class AgentConfig:
     control_port: int
     initial_bootstrap: bool
     defer_bootstrap: bool
+    km_base_url: str
+    km_query_path: str
+    km_assertions_path: str
+    km_baseline_path: str
+    level_goal: LevelGoal | None
+    km_players_path: str = "/km/players"
 
     @classmethod
     def load(cls, path: str) -> "AgentConfig":
@@ -81,8 +88,22 @@ class AgentConfig:
         defer_bootstrap = bootstrap.get("defer", False)
         if not isinstance(defer_bootstrap, bool):
             raise ValueError("bootstrap.defer must be a boolean")
+        ollama_base_url = str(ollama.get("base_url", "http://localhost:9081")).rstrip("/")
+        ollama_path = str(ollama.get("path", "/ollama/completions"))
+        km = raw.get("km", None)
+        if km is None:
+            km = {}
+        if not isinstance(km, dict):
+            raise ValueError("Config section 'km' must be a mapping")
+        km_base_url = str(km.get("base_url", "")).strip().rstrip("/") or ollama_base_url
+        goal_value = raw.get("goal", None)
+        level_goal = None
+        if goal_value is not None:
+            if not isinstance(goal_value, dict):
+                raise ValueError("Config section 'goal' must be a mapping")
+            level_goal = LevelGoal.from_section(goal_value)
 
-        return cls(auth_base_url=auth_base_url, login_path=login_path, telnet_host=str(telnet.get("host", "localhost")), telnet_port=int(telnet.get("port", 6969)), telnet_replace_existing=replace_existing, api_base_url=api_base_url, agents_path=_api_path(api.get("agents_path", "/api/v1/agents")), prompts_path=_api_path(api.get("prompts_path", "/api/v1/agent-prompts")), memory_path=_api_path(api.get("memory_path", "/api/v1/agent-memory")), knowledge_path=_api_path(knowledge.get("path", "/api/v1/agent-knowledge")), ollama_base_url=str(ollama.get("base_url", "http://localhost:9081")).rstrip("/"), ollama_path=str(ollama.get("path", "/ollama/completions")), database=database, collection_name=collection_name, collection_path=collection_path, connections_path=connections_path, control_host=control_host, control_port=control_port, initial_bootstrap=initial_bootstrap, defer_bootstrap=defer_bootstrap)
+        return cls(auth_base_url=auth_base_url, login_path=login_path, telnet_host=str(telnet.get("host", "localhost")), telnet_port=int(telnet.get("port", 6969)), telnet_replace_existing=replace_existing, api_base_url=api_base_url, agents_path=_api_path(api.get("agents_path", "/api/v1/agents")), prompts_path=_api_path(api.get("prompts_path", "/api/v1/agent-prompts")), memory_path=_api_path(api.get("memory_path", "/api/v1/agent-memory")), knowledge_path=_api_path(knowledge.get("path", "/api/v1/agent-knowledge")), ollama_base_url=ollama_base_url, ollama_path=ollama_path, database=database, collection_name=collection_name, collection_path=collection_path, connections_path=connections_path, control_host=control_host, control_port=control_port, initial_bootstrap=initial_bootstrap, defer_bootstrap=defer_bootstrap, km_base_url=km_base_url, km_query_path=_api_path(km.get("query_path", "/km/query")), km_assertions_path=_api_path(km.get("assertions_path", "/km/assertions")), km_baseline_path=_api_path(km.get("baseline_path", "/km/baseline")), level_goal=level_goal, km_players_path=_api_path(km.get("players_path", "/km/players")))
 
 
 def _api_path(value: object) -> str:
