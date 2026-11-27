@@ -8,6 +8,10 @@ The process starts in `idle` and answers `idle`, `play`, `bootstrap`, `memory`, 
 
 `connect <connection-name>` authenticates a saved connection and reports the account name and available characters. `list` prints those names. `logon <characterName>` opens telnet only when that name is in the login list. `play` waits until that logon has succeeded. A missing telnet host or port on the connection uses `resources/agent.yml`.
 
-`memory` writes the session `WorkingMemory` to `working-memory.json` in the current directory. `memory <path>` writes that path instead. The reply names the file. A failed write names the error type and leaves the mode unchanged. When bootstrap runs, `play` copies the snapshot into working memory with `absorb_world` before the file can be reviewed. When commands are restored from knowledge, that copy does not run.
+`memory` writes the session `WorkingMemory` to `working-memory.json` in the current directory. `memory <path>` writes that path instead. The reply names the file. A failed write names the error type and leaves the mode unchanged. When bootstrap runs, `play` copies the snapshot into working memory with `play.MemoryObservation.absorb_world` before the file can be reviewed. When commands are restored from knowledge, that copy does not run.
 
 `output` controls gameplay text. Received telnet lines are still queued for play. `GameplayOutput` also prints them. Output is on by default and prints to the console. `output off` stops printing. `output on` resumes it. `output file` also appends to `session.txt`. `output file <path>` appends to that path. `output file off` stops the file. A line is omitted when it is the `logon` command or it carries `accountId`, `characterId`, `password`, `Authorization`, or a bearer token. The playing prompt and ordinary server text are printed.
+
+The memory review includes the live `session`: progress, room/exit freshness, combat, last prompt, unusable-reply markers, and any pending exchange. This section is visible locally and is omitted from the legacy memory REST body.
+
+The memory review separates top-level learned command descriptions from `session.available_commands` and `session.commands_observed`. Restored descriptions do not grant gameplay permission; each new login checks the server list once.

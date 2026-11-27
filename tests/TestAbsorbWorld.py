@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from memory.Conversation import Conversation
 from memory.WorkingMemory import WorkingMemory
+from play.MemoryObservation import absorb_world
 from play.WorldKnowledge import BeingRecord, PlayerRecord, RoomSnapshot, WorldKnowledge
 
 
@@ -23,7 +24,7 @@ class TestAbsorbWorld(unittest.TestCase):
         knowledge.remember_npc(BeingRecord(name="Guildmaster", kind="npc", pose="here", room_name="Temple"))
 
         memory = WorkingMemory()
-        memory.absorb_world(knowledge)
+        absorb_world(memory, knowledge)
 
         self.assertIsNone(memory.being_named("Example"))
         self.assertTrue(memory.being_named("Marcus").agentic)
@@ -47,8 +48,8 @@ class TestAbsorbWorld(unittest.TestCase):
 
         knowledge = WorldKnowledge()
         knowledge.room = RoomSnapshot(name="The Temple Of Mota", description="Stone hall.", exits=["north"])
-        memory.absorb_world(knowledge)
-        memory.absorb_world(knowledge)
+        absorb_world(memory, knowledge)
+        absorb_world(memory, knowledge)
         self.assertEqual(len(memory.rooms()), 2)
         self.assertEqual(memory.room_named("The Temple Of Mota").description, "Stone hall.")
         self.assertEqual(memory.room_named("The Temple Of Mota").exits, ["north"])

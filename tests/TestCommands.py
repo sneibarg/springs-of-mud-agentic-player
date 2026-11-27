@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from memory.Conversation import Conversation
 from memory.WorkingMemory import WorkingMemory
+from play.MemoryObservation import absorb_world
 from play.WorldKnowledge import BeingRecord, PlayerRecord, RoomSnapshot, WorldKnowledge
 
 
@@ -17,7 +18,7 @@ from play.WorldKnowledge import BeingRecord, PlayerRecord, RoomSnapshot, WorldKn
 class TestCommands(unittest.TestCase):
     def test_commands_stay_in_the_order_the_server_offered(self):
         memory = WorkingMemory()
-        remembered = memory.remember_commands(["look", "help", "look", "WHO"])
+        remembered = memory.observe_commands(["look", "help", "look", "WHO"])
         self.assertEqual([command.name for command in remembered], ["look", "help", "look", "who"])
         self.assertEqual([command.name for command in memory.commands()], ["look", "help", "who"])
         self.assertEqual(memory.command_named("Look").category, "")
@@ -26,7 +27,7 @@ class TestCommands(unittest.TestCase):
         memory.remember_command("look")
         self.assertEqual(memory.command_named("LOOK").category, "information")
         self.assertEqual(memory.command_named("look").help_text, "Look around.")
-        memory.absorb_world(WorldKnowledge())
+        absorb_world(memory, WorldKnowledge())
         self.assertEqual([command.name for command in memory.commands()], ["look", "help", "who"])
         self.assertEqual(memory.to_review()["commands"][0], {"name": "look", "category": "information", "help_text": "Look around."})
         memory.replace_commands(memory.commands()[:1])

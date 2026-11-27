@@ -46,6 +46,7 @@ class CommandChannel:
         self._sleep = sleep or time.sleep
         self.saw_prompt = False
         self.last_prompt = ""
+        self.drained_frames: list[tuple[list[str], bool]] = []
 
     def exchange(self, command: str, timeout_s: Optional[float] = None) -> list[str]:
         self.client.send_line(command)
@@ -57,17 +58,24 @@ class CommandChannel:
     def drain(self) -> list[str]:
         """Return lines already queued. A playing prompt is kept on `last_prompt` and left out of the list."""
         lines: list[str] = []
+        frame: list[str] = []
+        self.drained_frames = []
         while True:
             line = self.client.poll_line()
             if line is None:
+                if frame:
+                    self.drained_frames.append((frame, False))
                 return lines
             if is_prompt(line):
                 self.saw_prompt = True
                 self.last_prompt = line.strip()
+                self.drained_frames.append((frame, True))
+                frame = []
                 continue
             if self._answer_gate(line):
                 continue
             lines.append(line)
+            frame.append(line)
 
     def read_until_prompt(self, timeout_s: Optional[float] = None) -> list[str]:
         wait_s = self.timeout_s if timeout_s is None else timeout_s

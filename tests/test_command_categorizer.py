@@ -5,7 +5,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from memory.WorkingMemory import WorkingMemory
+from play.WorldKnowledge import WorldKnowledge
 from play.CommandCategorizer import CommandCategorizer
 from prompt.Prompt import Prompt
 
@@ -36,18 +36,19 @@ class TestCommandCategorizer(unittest.TestCase):
 
     def test_categorize_stores_the_model_category(self):
         client = _Client('{"category": "movement"}')
-        memory = WorkingMemory()
-        memory.remember_commands(["north", "look"])
-        category = CommandCategorizer(client, _prompt()).categorize(memory, "north", "Walk north.")
+        knowledge = WorldKnowledge()
+        knowledge.remember_command("north")
+        knowledge.remember_command("look")
+        category = CommandCategorizer(client, _prompt()).categorize(knowledge, "north", "Walk north.")
         self.assertEqual(category, "movement")
-        self.assertEqual(memory.command_named("north").category, "movement")
-        self.assertEqual(memory.command_named("look").category, "")
+        self.assertEqual(knowledge.commands.named("north").category, "movement")
+        self.assertEqual(knowledge.commands.named("look").category, "")
         self.assertEqual(client.bodies[0]["user"], "Command: north\nWalk north.")
 
     def test_categorize_waits_for_a_prompt_and_a_client(self):
-        memory = WorkingMemory()
+        knowledge = WorldKnowledge()
         with self.assertRaises(RuntimeError):
-            CommandCategorizer(prompt=_prompt()).categorize(memory, "look", "Look around.")
+            CommandCategorizer(prompt=_prompt()).categorize(knowledge, "look", "Look around.")
         with self.assertRaises(RuntimeError):
             CommandCategorizer(_Client("{}")).submission("look", "Look around.")
 

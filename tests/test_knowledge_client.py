@@ -99,10 +99,11 @@ class TestKnowledgeClient(unittest.TestCase):
         self.assertEqual(text, "Knowledge: 1 help, 0 topics, 1 commands, 0 categorized, 1 areas, 1 mobiles, 0 npcs, 2 players, 1 items.\nCurrent room: By the Temple Altar")
         self.assertEqual(WorldKnowledge.summary(WorldKnowledge()), "Knowledge: 0 help, 0 topics, 0 commands, 0 categorized, 0 areas, 0 mobiles, 0 npcs, 0 players, 0 items.")
 
-    def test_help_topics_supply_commands_when_the_command_list_is_absent(self):
+    def test_help_topics_supply_legacy_descriptions_without_becoming_command_records(self):
         knowledge = WorldKnowledge.from_document({"helpTopics": [{"command": "look", "keyword": "LOOK", "text": "Look around.", "raw": "LOOK", "missing": False, "topics": []}]})
         self.assertTrue(knowledge.has_commands())
-        self.assertEqual([(command.name, command.help_text) for command in knowledge.command_records()], [("look", "Look around.")])
+        self.assertEqual([(command.name, command.help_text) for command in knowledge.commands_from_help()], [("look", "Look around.")])
+        self.assertEqual(knowledge.command_records(), [])
         self.assertEqual(knowledge.to_document(character_id="char-1", character_name="Example", agent_name="example-agent")["commands"], [])
 
 

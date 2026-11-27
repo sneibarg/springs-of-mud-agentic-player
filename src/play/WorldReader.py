@@ -29,6 +29,8 @@ class RoomObservation:
     mobiles: list[BeingRecord] = field(default_factory=list)
     npcs: list[BeingRecord] = field(default_factory=list)
     players_present: list[PlayerRecord] = field(default_factory=list)
+    complete: bool = False
+    fighting_players: list[str] = field(default_factory=list)
 
 
 class WorldReader:
@@ -87,12 +89,14 @@ def parse_room(lines: list[str], players: list[PlayerRecord]) -> RoomObservation
     prose: list[str] = []
     presences: list[Presence] = []
     in_exits = False
+    saw_exits = False
     for line in lines:
         if is_prompt(line):
             continue
         stripped = line.strip()
         if stripped.lower().startswith("obvious exits"):
             in_exits = True
+            saw_exits = True
             continue
         presence = _parse_presence(stripped)
         if presence is not None:
@@ -104,6 +108,9 @@ def parse_room(lines: list[str], players: list[PlayerRecord]) -> RoomObservation
             if direction is not None:
                 exits.append(direction)
                 continue
+            if stripped.lower() in {"none", "none.", "[none]"}:
+                in_exits = False
+                continue
             in_exits = False
         if line.startswith("    ") and stripped:
             items.append(stripped)
@@ -112,12 +119,14 @@ def parse_room(lines: list[str], players: list[PlayerRecord]) -> RoomObservation
             prose.append(stripped)
 
     room = RoomSnapshot(name=prose[0] if prose else "", description="\n".join(prose[1:]) if len(prose) > 1 else "", exits=exits, item_lines=items)
-    observation = RoomObservation(room=room)
+    observation = RoomObservation(room=room, complete=bool(room.name) and saw_exits)
     for presence in presences:
         player = _match_player(presence.name, players)
         if player is not None:
             player.auras = list(presence.auras)
             observation.players_present.append(player)
+            if presence.pose == "fighting" and presence.detail.upper().startswith("YOU"):
+                observation.fighting_players.append(player.name)
             continue
         being = BeingRecord(name=presence.name, kind=_being_kind(presence.name), pose=presence.pose, room_name=room.name, detail=presence.detail, auras=list(presence.auras))
         if being.kind == "npc":

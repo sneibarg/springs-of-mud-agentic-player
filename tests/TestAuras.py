@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from memory.Conversation import Conversation
 from memory.WorkingMemory import WorkingMemory
+from play.MemoryObservation import absorb_world, observe_line
 from play.WorldKnowledge import BeingRecord, PlayerRecord, RoomSnapshot, WorldKnowledge
 
 
@@ -40,14 +41,14 @@ class TestAuras(unittest.TestCase):
         knowledge.remember_mobile(BeingRecord(name="A healer", kind="mobile", pose="here", room_name="Altar", auras=["Red Aura", "White Aura"]))
         knowledge.remember_npc(BeingRecord(name="Hassan", kind="npc", pose="here", room_name="Temple", auras=["Golden Aura"]))
         memory = WorkingMemory()
-        memory.absorb_world(knowledge)
+        absorb_world(memory, knowledge)
         self.assertEqual(memory.being_named("Fizban").auras, ["White Aura"])
         self.assertEqual(memory.being_named("A healer").auras, ["Red Aura", "White Aura"])
         self.assertEqual(memory.being_named("Hassan").auras, ["Golden Aura"])
 
     def test_a_fighting_line_keeps_the_aura_and_drops_other_prefixes(self):
         memory = WorkingMemory()
-        seen = memory.observe_line("(Invis) (White Aura) A goblin is here, fighting YOU!", room_name="Temple")
+        seen = observe_line(memory, "(Invis) (White Aura) A goblin is here, fighting YOU!", room_name="Temple")
         self.assertEqual(seen.name, "A goblin")
         self.assertTrue(seen.aggressive)
         self.assertEqual(seen.auras, ["White Aura"])

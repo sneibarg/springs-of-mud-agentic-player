@@ -15,6 +15,8 @@ python -m unittest tests.TestHelpReader
 python -m unittest tests.TestWorldReader
 python -m unittest tests.test_bootstrapper
 python -m unittest tests.test_command_categorizer
+python -m unittest tests.test_command_list
+python -m unittest tests.test_command_availability
 python -m unittest tests.test_command_channel
 python -m unittest tests.test_knowledge_client
 python -m unittest tests.TestConsiderMemory
@@ -32,6 +34,10 @@ python -m unittest tests.test_km_client
 python -m unittest tests.TestKmPlayer
 python -m unittest tests.test_level_question
 python -m unittest tests.test_gameplay_engine
+python -m unittest tests.test_play_session
+python -m unittest tests.test_session_evidence
+python -m unittest tests.test_km_evidence_adapter
+python -m unittest tests.test_observation_identity
 python -m unittest tests.test_player_control
 python -m unittest tests.test_gameplay_output
 python -m unittest tests.TestControlProtocol
@@ -46,3 +52,13 @@ python -m unittest discover -s tests
 ```
 
 When changing collection documents, auth parsing, the logon line, or first-login parsing, extend these tests with a fixture or the real `resources/collections/SOMDB.Agents.json` snapshot. Parser tests feed server-shaped text and do not open a socket.
+
+`tests.test_play_session` covers live review serialization, fresh legacy restores, clear/isolation, and score parsing/state updates. `tests.test_gameplay_engine` covers engine recreation with the same memory, preservation of consider/travel/combat/prompt state, unusable-reply suppression, and interrupted exchanges that remain pending without being resent. These tests use fake channels and do not call live services.
+
+`tests.test_observation_identity` covers complete/partial replacement, duplicate room/being/item identities, absent and returning mobs, encounter-bound freshness, nullable flags, legacy duplicate rows, prompt framing, refused/uncertain/confirmed movement, forward-only edges, failed fleeing, player classification, and stale model enrichment. It uses fake channels and source-shaped room text, without live game or KM calls.
+
+`tests.test_command_list` verifies shared immutable values, normalization, ordered merge/replacement, and legacy description behavior. `tests.test_command_availability` verifies fresh-login command checks, help-only migration, revocation, known-empty versus unknown availability, KM index replacement, metadata ownership, prohibited verbs, and failure behavior with fake channels and patched startup clients.
+
+`tests.test_session_evidence` covers immutable ordering/source links, local review and legacy isolation, both defer modes, partial/missing pages, interrupted bootstrap and gameplay, model failure/staleness, forced attempts, fresh prompt synchronization, shared replacement, restored availability, and the completion acceptance gate. KM reasoning failures and cross-player completion are exercised with fakes; these tests do not claim a live KM round trip or durable saving.
+
+`tests.test_km_evidence_adapter` covers deterministic prefix replay, player/stream isolation, metadata versus availability, ordered replacement and emptiness, quoting/reserved constants, listed-area semantics, provisional room/encounter identity, directed edges and unknown door prerequisites, historical versus tactical membership, fresh considers, confirmed gear validation, source permissions/loot prerequisites, source provenance, malformed-prefix isolation, and unsupported records. Tests compare generated plans and do not submit them to live KM or acknowledge the journal.

@@ -14,6 +14,7 @@ from agent.AgentCollection import AgentCollection
 from agent.AgentConfig import AgentConfig
 from memory.WorkingMemory import WorkingMemory
 from net.rest.AgentClient import AgentClient
+from play.MemoryObservation import absorb_world
 from play.WorldKnowledge import WorldKnowledge
 from play.WorldReader import parse_room, parse_who
 from tests.live_session import QUIT_PHRASE, LivePlay, require_live_play
@@ -55,7 +56,7 @@ class TestLiveWorkingMemory(unittest.TestCase):
                 knowledge.note_player_seen(player.name, observation.room.name)
 
             memory = WorkingMemory()
-            memory.absorb_world(knowledge)
+            absorb_world(memory, knowledge)
             stored = memory.being_named(mobile.name)
             self.assertIsNotNone(stored)
             self.assertEqual(stored.kind, "mobile")
@@ -120,7 +121,7 @@ class TestLiveWorkingMemory(unittest.TestCase):
                 knowledge.note_player_seen(player.name, observation.room.name)
 
             memory = WorkingMemory()
-            memory.absorb_world(knowledge)
+            absorb_world(memory, knowledge)
             stored = memory.being_named(other.name)
             self.assertIsNotNone(stored)
             self.assertEqual(stored.kind, "player")
@@ -213,7 +214,7 @@ class TestLiveWorkingMemory(unittest.TestCase):
 def _absorb_room(memory: WorkingMemory, observation) -> None:
     knowledge = WorldKnowledge()
     knowledge.room = observation.room
-    memory.absorb_world(knowledge)
+    absorb_world(memory, knowledge)
 
 
 def _read_room(play: LivePlay, players: list):

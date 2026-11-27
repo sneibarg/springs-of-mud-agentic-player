@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from memory.Conversation import Conversation
 from memory.WorkingMemory import WorkingMemory
+from play.MemoryObservation import observe_line
 from play.WorldKnowledge import BeingRecord, PlayerRecord, RoomSnapshot, WorldKnowledge
 
 
@@ -18,7 +19,7 @@ class TestAggressiveMobiles(unittest.TestCase):
     def test_a_mobile_fighting_you_is_aggressive(self):
         memory = WorkingMemory()
         memory.remember_mobile("a goblin", room_name="Temple")
-        seen = memory.observe_line("A goblin is here, fighting YOU!", room_name="Temple")
+        seen = observe_line(memory, "A goblin is here, fighting YOU!", room_name="Temple")
         self.assertTrue(seen.aggressive)
         self.assertEqual(memory.aggressive_mobiles(), [seen])
 
@@ -33,7 +34,7 @@ class TestAggressiveMobiles(unittest.TestCase):
         memory.note_aggressive("a wolf")
         memory.remember_consider("a wolf", ["A wolf looks like an easy kill."], kind="mobile")
         memory.remember_room("Temple", description="Stone.", exits=["north"])
-        memory.remember_commands(["look", "north"])
+        memory.observe_commands(["look", "north"])
         memory.remember_conversation("the gate", "room", "Temple", participants=["Marcus"])
         memory.clear()
         self.assertEqual(memory.mobiles(), [])

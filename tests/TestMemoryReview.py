@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from memory.Conversation import Conversation
 from memory.WorkingMemory import WorkingMemory
+from play.MemoryObservation import absorb_world
 from play.WorldKnowledge import BeingRecord, PlayerRecord, RoomSnapshot, WorldKnowledge
 from util.SharedUtil import SharedUtil
 
@@ -128,12 +129,13 @@ class TestMemoryReview(unittest.TestCase):
     def test_a_sign_in_the_room_is_saved_with_the_session(self):
         memory = WorkingMemory()
         room = memory.remember_room("By the Temple Altar", description="You are by the altar. There is a sign on the wall.", exits=["south"], items=[{"name": "Sign", "line": "There is a sign on the wall.", "source": "description"}, {"name": "  "}, {"name": "pit", "line": "A pit for sacrifices is in front of the altar.", "source": "object"}, {"name": "sign", "line": "duplicate"}])
-        self.assertEqual([(item.name, item.line, item.source) for item in room.items], [("sign", "There is a sign on the wall.", "description"), ("pit", "A pit for sacrifices is in front of the altar.", "object")])
+        self.assertEqual([(item.name, item.line, item.source) for item in room.items], [("sign", "There is a sign on the wall.", "description"), ("pit", "A pit for sacrifices is in front of the altar.", "object"), ("sign", "duplicate", "")])
+        self.assertEqual(len({item.item_id for item in room.items}), 3)
         memory.remember_room("By the Temple Altar")
         self.assertEqual(memory.room_named("by the temple altar").items[0].name, "sign")
         knowledge = WorldKnowledge()
         knowledge.room = RoomSnapshot(name="By the Temple Altar", description="You are by the altar. There is a sign on the wall.", exits=["south"])
-        memory.absorb_world(knowledge)
+        absorb_world(memory, knowledge)
         restored = WorkingMemory.from_collection(memory.to_collection("AgentJanky"))
         sign = restored.room_named("By the Temple Altar").items[0]
         self.assertEqual((sign.name, sign.line, sign.source), ("sign", "There is a sign on the wall.", "description"))

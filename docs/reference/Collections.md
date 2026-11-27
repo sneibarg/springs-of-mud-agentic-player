@@ -16,3 +16,7 @@ Leave passwords, JWTs, and telnet hosts out of agent documents. Saved account pa
 `SOMDB.Memories.json` is a JSON array of session snapshots. Look a document up by `agentName`, the same local name as `Agents.name`. One document belongs to one agent. Its sections are `players`, `agenticPlayers`, `mobiles`, `npcs`, `aggressiveMobiles`, `rooms`, `commands`, `considers`, and `conversations`. Nested names use camelCase, such as `roomName` and `helpText`. This collection is not world knowledge.
 
 Read this collection directly while it stays small. If it grows large, add a local query tool and use that tool before pasting documents into context.
+
+Memory command rows are historical descriptions, not a persisted availability grant. Current availability is observed again after login and remains in live session review only. Knowledge and memory retain the existing name/category/helpText wire shape.
+
+Session evidence, bootstrap acceptance requirements, stream IDs, and acknowledgment IDs remain live review data. They are omitted from both legacy REST bodies and are not recovered from the collection fixtures.

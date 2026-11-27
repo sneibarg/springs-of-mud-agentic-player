@@ -2,13 +2,15 @@ import re
 
 from dataclasses import dataclass
 
+from memory.CombatState import CombatState
+from memory.PlayClock import PlayClock
+from play.KmSyntax import token as _token
 from play.LevelAttempt import LevelAttempt
 from play.LevelGoal import LevelGoal
-from play.PlayClock import PlayClock
 
 
 _RANKS = {"cautious": 0, "steady": 1, "bold": 2}
-_ATTEMPT = re.compile(r"\(:args\s+(\S+)\s+(\"[^\"]*\"|\S+)\s+(\S+)\s+(\"[^\"]*\"|\S+)\)")
+_ATTEMPT = re.compile(r"\(:args\s+([^\s()]+)\s+(\"[^\"]*\"|[^\s()]+)\s+([^\s()]+)\s+(\"[^\"]*\"|[^\s()]+)\)")
 _QUERIES = ("(the som-notch of *View)", "(the som-cooldown-next of *View)", "(the som-licensed-rule of *View)", "(the som-attempts of (the som-licensed-directive of *View))")
 
 
@@ -37,9 +39,10 @@ class LevelQuestion:
     A stale consider is passed with no outlook, so the library surveys it.
     """
 
-    def __init__(self, goal: LevelGoal, clock: PlayClock, readings: list[MobileReading], exits: list[str], *, areas_known: bool, flee_hp: int):
+    def __init__(self, goal: LevelGoal, clock: PlayClock, readings: list[MobileReading], exits: list[str], *, areas_known: bool, flee_hp: int, combat: CombatState | None = None):
         self.goal = goal
         self.clock = clock
+        self.combat = combat if combat is not None else CombatState()
         self.readings = list(readings)
         self.exits = list(exits)
         self.areas_known = areas_known
@@ -62,14 +65,14 @@ class LevelQuestion:
         clock_pairs = [("instance-of", "Som-Progress-Projection"), ("som-event", "view"), ("som-clock-kind", "level"), ("som-clock-target", str(self.goal.target_level)), ("som-start-level", str(self.clock.start_level)), ("som-start-fraction", "0"), ("som-level", str(self.clock.level)), ("som-exp-to-level", str(self.clock.exp_to_level)), ("som-exp-span", str(self.clock.exp_span)), ("som-elapsed-minutes", str(elapsed)), ("som-score-count", str(self.clock.score_count)), ("som-prior-notch", prior), ("som-cooldown-steps", str(self.clock.cooldown_steps)), ("som-saves", str(self.clock.saves)), ("som-score-steps", str(self.clock.score_steps)), ("som-flee-floor", str(self.flee_hp)), ("som-untried-exits", _seq(self.exits))]
         if self.areas_known:
             clock_pairs.append(("som-areas-known", "t"))
-        if self.clock.fighting:
+        if self.combat.fighting:
             clock_pairs.append(("som-fighting", "t"))
-        if self.clock.hit is not None:
-            clock_pairs.append(("som-hit", str(self.clock.hit)))
-        if self.clock.max_hit is not None:
-            clock_pairs.append(("som-max-hit", str(self.clock.max_hit)))
-        if self.clock.position:
-            clock_pairs.append(("som-position", self.clock.position))
+        if self.combat.hit is not None:
+            clock_pairs.append(("som-hit", str(self.combat.hit)))
+        if self.combat.max_hit is not None:
+            clock_pairs.append(("som-max-hit", str(self.combat.max_hit)))
+        if self.combat.position:
+            clock_pairs.append(("som-position", self.combat.position))
         if names:
             clock_pairs.append(("som-reading", _seq(names)))
         frames.append(_has("*Goal", [("instance-of", "Som-Level-Goal"), ("som-target-level", str(self.goal.target_level)), ("som-risk-ceiling", ceiling), ("som-budget-minutes", str(self.goal.minutes))]))
@@ -107,12 +110,6 @@ def _seq(items: list[str]) -> str:
         return "(:seq)"
     return "(:seq " + " ".join(_token(item) if not item.startswith("*") else item for item in items) + ")"
 
-
-def _token(value: str) -> str:
-    if re.fullmatch(r"[A-Za-z*][A-Za-z0-9_+-]*", value):
-        return value
-    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
-    return f'"{escaped}"'
 
 
 def _answer(result) -> str:

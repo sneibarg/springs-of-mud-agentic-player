@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from pathlib import Path
 
+from play.MemoryObservation import absorb_world
 from play.Bootstrapper import Bootstrapper
 from play.CategoryLesson import CategoryLesson
 from play.CommandLesson import CommandLesson
@@ -117,8 +118,8 @@ class TestBootstrapper(unittest.TestCase):
         self.assertEqual(knowledge.room.items, [])
         self.assertEqual(WorldKnowledge.summary(knowledge).split("\n")[0], "Knowledge: 2 help, 0 topics, 2 commands, 0 categorized, 1 areas, 0 mobiles, 0 npcs, 1 players, 0 items.")
 
-    def test_defer_false_keeps_ollama_results_in_working_memory(self):
-        client = _ScriptedClient(opening=["Welcome to the server!", "<10hp 10m 10mv>"], replies={"help": ["MOVEMENT\nnorth"], "commands": ["look        north       "], "help look": ["LOOK", "Look around.", "LOOK <thing>", "Look at something."], "help north": ["NORTH", "Walk north."], "areas": [f"{'[1-5] Romy: Temple of Mota':<39}"], "who": ["[1    human    Mag] Example the agent", "Players found: 1"], "look": ["Temple of Mota", "You are by the altar. There is a sign on the wall."]})
+    def test_defer_false_keeps_learned_descriptions_on_world_knowledge(self):
+        client = _ScriptedClient(opening=["Welcome to the server!", "<10hp 10m 10mv>"], replies={"help": ["MOVEMENT\nnorth"], "commands": ["look        north       "], "help look": ["LOOK", "Look around.", "LOOK <thing>", "Look at something."], "help north": ["NORTH", "Walk north."], "areas": [f"{'[1-5] Romy: Temple of Mota':<39}"], "who": ["[1    human    Mag] Example the agent", "Players found: 1"], "look": ["Temple of Mota", "You are by the altar. There is a sign on the wall.", "Obvious exits:", "None."]})
         clock = _Clock()
         channel = CommandChannel(client, timeout_s=1.0, clock=clock, sleep=clock.sleep)
         prompts = {"categories": Prompt(name="categories", model="gpt-oss:20b", system="Read the help index.", user="{categories}", json_schema={"type": "object", "required": ["categories"]}, tokens={}), "commands": Prompt(name="commands", model="gpt-oss:20b", system="Read the command columns.", user="{commands}", json_schema={"type": "object", "required": ["commands"]}, tokens={}), "help": Prompt(name="help", model="gpt-oss:20b", system="Read the help page.", user="{help}", json_schema={"type": "object", "required": ["missing", "topics"]}, tokens={}), "look": Prompt(name="look", model="gpt-oss:20b", system="Read the room.", user="{look}", json_schema={"type": "object"}, tokens={})}
@@ -140,9 +141,11 @@ class TestBootstrapper(unittest.TestCase):
         knowledge = bootstrapper.bootstrap()
 
         self.assertTrue(model.bodies)
-        self.assertEqual(published, [])
-        self.assertIsNone(knowledge.help_for("look"))
-        self.assertEqual(knowledge.command_records(), [])
+        self.assertEqual(len(published), 1)
+        self.assertEqual(knowledge.help_for("look").raw, "LOOK\nLook around.\nLOOK <thing>\nLook at something.")
+        self.assertEqual([command.name for command in knowledge.command_records()], ["look", "north"])
+        self.assertIs(bootstrapper.memory.command_knowledge, knowledge.commands)
+        self.assertTrue(bootstrapper.memory.session.command_available("look"))
         self.assertEqual(knowledge.room.items, [])
         self.assertEqual(bootstrapper.memory.command_named("north").category, "movement")
         self.assertEqual(bootstrapper.memory.command_named("look").category, "information")
@@ -164,7 +167,7 @@ class TestBootstrapper(unittest.TestCase):
         self.assertNotIn("sample", model.bodies[0]["user"])
 
     def test_look_prompt_notes_a_sign_on_the_session_room(self):
-        look = ["By the Temple Altar", "You are by the altar. There is a sign on the wall.", "    A pit for sacrifices is in front of the altar."]
+        look = ["By the Temple Altar", "You are by the altar. There is a sign on the wall.", "Obvious exits:", "None.", "    A pit for sacrifices is in front of the altar."]
         client = _ScriptedClient(opening=["Welcome to the server!", "<10hp 10m 10mv>"], replies={"commands": ["look          help          areas         who           "], "help look": ["LOOK", "Look around."], "help help": ["HELP", "Read a help page."], "help areas": ["AREAS", "List the areas."], "help who": ["WHO", "See who is playing."], "areas": [f"{'[1-5] Romy: Temple of Mota':<39}"], "who": ["[1    human    Mag] Example the agent", "Players found: 1"], "look": look})
         clock = _Clock()
         channel = CommandChannel(client, timeout_s=1.0, clock=clock, sleep=clock.sleep)
@@ -177,7 +180,7 @@ class TestBootstrapper(unittest.TestCase):
 
         bootstrapper = Bootstrapper(None, ["Example"], "Example", channel=channel, prompts=prompts, ollama=_Model(answer))
         bootstrapper.bootstrap()
-        bootstrapper.memory.absorb_world(bootstrapper.knowledge)
+        absorb_world(bootstrapper.memory, bootstrapper.knowledge)
         room = bootstrapper.memory.room_named("By the Temple Altar")
         self.assertEqual([(item.name, item.line, item.source) for item in room.items], [("sign", "There is a sign on the wall.", "description"), ("pit", "A pit for sacrifices is in front of the altar.", "object")])
         bootstrapper._remember_look_items("not json")
@@ -247,14 +250,15 @@ class TestBootstrapper(unittest.TestCase):
         self.assertFalse(parsed["missing"])
         self.assertEqual(parsed["topics"][0], {"keyword": "LOOK", "text": "Look around."})
         self.assertEqual(bootstrapper.memory.command_named("look").help_text, "Look around.")
-        self.assertIsNone(bootstrapper.knowledge.help_for("look"))
+        self.assertEqual(bootstrapper.knowledge.help_for("look").text, "Look around.")
         missing, missing_error = lessons[1].parsed_help()
         self.assertIsNotNone(missing, missing_error)
         self.assertTrue(missing["missing"])
         self.assertEqual(missing["topics"], [])
         self.assertEqual(bootstrapper.memory.command_named("xyz").help_text, "")
-        self.assertIsNone(bootstrapper.knowledge.help_for("xyz"))
-        self.assertEqual(bootstrapper.knowledge.command_records(), [])
+        self.assertTrue(bootstrapper.knowledge.help_for("xyz").missing)
+        self.assertEqual([command.name for command in bootstrapper.knowledge.command_records()], ["look", "xyz"])
+        self.assertFalse(bootstrapper.memory.session.commands_observed)
 
     def test_unparsed_help_keeps_the_response_and_the_server_topic(self):
         client = _ScriptedClient(opening=[], replies={"help look": ["LOOK", "Look around."]})
@@ -273,7 +277,7 @@ class TestBootstrapper(unittest.TestCase):
         self.assertEqual(stored.keyword, "LOOK")
         self.assertEqual(stored.text, "Look around.")
         self.assertEqual(stored.topics, [])
-        self.assertEqual(bootstrapper.memory.command_named("look").help_text, "")
+        self.assertEqual(bootstrapper.memory.command_named("look").help_text, "Look around.")
 
     def test_help_index_stores_categories_without_replacing_one(self):
         index = "\n".join(["MOVEMENT                            GROUP", "north south east west up down       follow group gtell split"])

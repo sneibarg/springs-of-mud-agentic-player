@@ -1,4 +1,4 @@
-from memory.WorkingMemory import WorkingMemory
+from play.WorldKnowledge import WorldKnowledge
 from net.rest.OllamaClient import OllamaClient
 from prompt.Prompt import Prompt
 from prompt.PromptSubmission import PromptSubmission
@@ -31,14 +31,14 @@ class CommandCategorizer:
             raise ValueError("User prompt cannot be null or empty")
         return PromptSubmission(name=self.prompt.name, model=self.prompt.model, system=system, user=user, json_schema=dict(self.prompt.json_schema), intents=())
 
-    def categorize(self, memory: WorkingMemory, command: str, help_text: str) -> str:
+    def categorize(self, knowledge: WorldKnowledge, command: str, help_text: str) -> str:
         """Send the prompt and store the category on the remembered command."""
         if self.client is None:
             raise RuntimeError("No Ollama client is configured.")
         submission = self.submission(command, help_text)
         parsed = submission.read_completion(self.client.complete(submission.to_request()))
         category = _category_name(parsed)
-        memory.remember_command(command, category=category)
+        knowledge.remember_command(command, category=category)
         return category
 
 

@@ -25,7 +25,13 @@ def parse_command_names(lines: list[str]) -> list[str]:
     for line in lines:
         if is_prompt(line):
             continue
-        for token in line.split():
+        tokens = line.split()
+        # Only server-shaped command rows can grant availability. Prose is not a row.
+        if any(not _COMMAND_NAME.fullmatch(token.lower()) and not re.fullmatch(r"\W{1,2}", token) for token in tokens):
+            continue
+        if len(tokens) > 1 and len(re.split(r"\s{2,}|\t+", line.strip())) != len(tokens):
+            continue
+        for token in tokens:
             command = token.strip().lower()
             if not _COMMAND_NAME.fullmatch(command) or command in seen:
                 continue

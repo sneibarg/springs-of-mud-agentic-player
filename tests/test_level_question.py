@@ -8,7 +8,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from net.rest.KmAnswer import KmAnswer
 from play.LevelGoal import LevelGoal
 from play.LevelQuestion import LevelQuestion, MobileReading
-from play.PlayClock import PlayClock
+from memory.PlayClock import PlayClock
+from memory.CombatState import CombatState
 
 
 def _results(attempts):
@@ -18,6 +19,19 @@ def _results(attempts):
 
 
 class TestLevelQuestion(unittest.TestCase):
+    def test_unquoted_arguments_do_not_include_surrounding_sequence_parentheses(self):
+        decision = LevelQuestion.read(_results('((:seq (:args survey "information / communication" consider rat) (:args engage combat kill wolf)))'))
+        self.assertEqual([attempt.command() for attempt in decision.attempts], ["consider rat", "kill wolf"])
+
+    def test_combat_projection_uses_the_session_combat_state(self):
+        combat = CombatState(hit=12, max_hit=40, fighting=True, position="fighting")
+        question = LevelQuestion(LevelGoal(target_level=2, risk="steady", minutes=0), PlayClock(score_count=1, level=1), [], [], areas_known=False, flee_hp=20, combat=combat)
+        text = "\n".join(question.expressions())
+        self.assertIn("(som-fighting (t))", text)
+        self.assertIn("(som-hit (12))", text)
+        self.assertIn("(som-max-hit (40))", text)
+        self.assertIn("(som-position (fighting))", text)
+
     def test_prior_notch_is_clamped_and_a_stale_reading_has_no_outlook(self):
         goal = LevelGoal(target_level=5, risk="cautious", minutes=0)
         clock = PlayClock(start_level=1, level=1, exp_to_level=1000, exp_span=1000, score_count=1, prior_notch="bold", score_steps=2, saves=1)

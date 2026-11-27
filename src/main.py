@@ -25,7 +25,10 @@ from net.rest.PromptClient import PromptClient, PromptStoreError
 from net.telnet.PlayerSession import PlayerSession
 from net.telnet.TelnetClient import TelnetConfig
 from play.Bootstrapper import Bootstrapper
+from play.BootstrapCompletion import BootstrapCompletion
 from play.CommandChannel import CommandChannel
+from play.CommandAvailability import restore_commands
+from play.CommandSituation import assert_learned
 from play.GameplayEngine import GameplayEngine
 from play.PlayError import PlayError
 from play.WorldKnowledge import WorldKnowledge
@@ -57,8 +60,9 @@ def load_registry(config: AgentConfig) -> AgentRegistry:
 def run_agent(agent_name: str, config: AgentConfig) -> int:
     registry = load_registry(config)
     agent = registry.require(agent_name)
+    player = KmPlayer(_km_client(config), agent.account_name, agent.character_name)
     try:
-        KmPlayer(_km_client(config), agent.account_name, agent.character_name).ensure()
+        player.ensure()
     except KmError as exc:
         logger.error("KM player startup failed: %s", exc)
         print(f"KM player startup failed: {exc}", file=sys.stderr)
@@ -66,13 +70,8 @@ def run_agent(agent_name: str, config: AgentConfig) -> int:
     catalog = ConnectionCatalog.load(config.connections_path)
     output = GameplayOutput()
     print(f"Config: {config}", flush=True)
-    account = AccountSession(catalog, auth_base_url=config.auth_base_url, login_path=config.login_path,
-                             telnet_host=config.telnet_host, telnet_port=config.telnet_port,
-                             auth_client_factory=lambda base_url: AuthClient(base_url, login_path=config.login_path),
-                             session_factory=lambda host, port: PlayerSession(TelnetConfig(host=host, port=port),
-                                                                              on_line=output.write))
-    memory_client = MemoryClient(config.api_base_url, path=config.memory_path,
-                                 headers_provider=lambda: account.auth_client.get_auth_headers() if account.auth_client else {})
+    account = AccountSession(catalog, auth_base_url=config.auth_base_url, login_path=config.login_path, telnet_host=config.telnet_host, telnet_port=config.telnet_port, auth_client_factory=lambda base_url: AuthClient(base_url, login_path=config.login_path), session_factory=lambda host, port: PlayerSession(TelnetConfig(host=host, port=port), on_line=output.write))
+    memory_client = MemoryClient(config.api_base_url, path=config.memory_path, headers_provider=lambda: account.auth_client.get_auth_headers() if account.auth_client else {})
     memory, memory_ready = _load_memory(memory_client, agent.name)
     control = PlayerControl(memory=memory, output=output, account=account)
     server = ControlServer(control, host=config.control_host, port=config.control_port)
@@ -82,12 +81,12 @@ def run_agent(agent_name: str, config: AgentConfig) -> int:
     def on_play() -> None:
         nonlocal played
         if engine_box[0] is None:
-            engine_box[0] = _begin_play(account, registry, agent, config, memory, memory_client, memory_ready)
+            engine_box[0] = _begin_play(account, registry, agent, config, memory, memory_client, memory_ready, player)
         played = engine_box[0] is not None
 
     def on_bootstrap() -> None:
         nonlocal played
-        engine_box[0] = _begin_play(account, registry, agent, config, memory, memory_client, memory_ready, force=True)
+        engine_box[0] = _begin_play(account, registry, agent, config, memory, memory_client, memory_ready, player, force=True)
         if engine_box[0] is not None:
             played = True
 
@@ -101,14 +100,12 @@ def run_agent(agent_name: str, config: AgentConfig) -> int:
         server.start()
         if config.initial_bootstrap:
             def begin_initial():
-                engine_box[0] = _begin_play(account, registry, agent, config, memory, memory_client, memory_ready,
-                                            force=True)
+                engine_box[0] = _begin_play(account, registry, agent, config, memory, memory_client, memory_ready, player, force=True)
                 return engine_box[0]
 
             if _run_initial_bootstrap(account, catalog, agent, begin_initial):
                 played = True
-        control.drive(on_play, on_bootstrap=on_bootstrap, on_step=on_step,
-                      connected=lambda: account.session is None or account.session.client.connected)
+        control.drive(on_play, on_bootstrap=on_bootstrap, on_step=on_step, connected=lambda: account.session is None or account.session.client.connected)
     except PlayError as exc:
         print(str(exc), file=sys.stderr)
         return 1
@@ -145,8 +142,7 @@ def _run_initial_bootstrap(account: AccountSession, catalog: ConnectionCatalog, 
     return bool(begin())
 
 
-def _begin_play(account: AccountSession, registry, agent, config, memory, memory_client: MemoryClient,
-                memory_ready: bool, force: bool = False) -> GameplayEngine | None:
+def _begin_play(account: AccountSession, registry, agent, config, memory, memory_client: MemoryClient, memory_ready: bool, player: KmPlayer | None = None, force: bool = False) -> GameplayEngine | None:
     if not account.logged_on:
         print("Log on with an available character before play.", file=sys.stderr)
         return None
@@ -158,41 +154,52 @@ def _begin_play(account: AccountSession, registry, agent, config, memory, memory
         if stored is not None:
             knowledge = WorldKnowledge.from_document(stored)
             if knowledge.has_commands():
-                memory.replace_commands(knowledge.command_records())
-                print(f"Commands: {len(memory.commands())} restored from knowledge.")
-                return _play_engine(account, config, memory, knowledge, room_current=False)
+                channel = CommandChannel(account.session.client, replace_existing=config.telnet_replace_existing)
+                restore_commands(channel, memory, knowledge)
+                print(f"Commands: {len(memory.session.available_commands.records())} verified for this session.")
+                _assert_commands(player, memory, knowledge)
+                return _play_engine(account, config, memory, knowledge, player=player, room_current=False, channel=channel)
 
     def publish(knowledge: WorldKnowledge) -> None:
-        _save_knowledge(config, account.auth_client, character.id,
-                        knowledge.to_document(character_id=character.id, character_name=character.name,
-                                              agent_name=agent.name))
+        _save_knowledge(config, account.auth_client, character.id, knowledge.to_document(character_id=character.id, character_name=character.name, agent_name=agent.name))
 
-    knowledge = Bootstrapper(account.session, [item.character_name for item in registry.all()], character.name,
-                             memory=memory, replace_existing=config.telnet_replace_existing, on_commands=publish,
-                             prompts=_load_prompts(config, account.auth_client),
-                             ollama=OllamaClient(config.ollama_base_url, path=config.ollama_path),
-                             defer=config.defer_bootstrap).bootstrap()
-    memory.absorb_world(knowledge)
-    _save_knowledge(config, account.auth_client, character.id,
-                    knowledge.to_document(character_id=character.id, character_name=character.name,
-                                          agent_name=agent.name))
+    bootstrapper = Bootstrapper(account.session, [item.character_name for item in registry.all()], character.name, memory=memory, replace_existing=config.telnet_replace_existing, on_commands=publish, prompts=_load_prompts(config, account.auth_client), ollama=OllamaClient(config.ollama_base_url, path=config.ollama_path), defer=config.defer_bootstrap, player=player, request_prompt=force and bool(memory.session.last_prompt))
+    knowledge = bootstrapper.bootstrap()
+    _save_knowledge(config, account.auth_client, character.id, knowledge.to_document(character_id=character.id, character_name=character.name, agent_name=agent.name))
     if memory_ready:
         _save_memory(memory_client, agent.name, memory)
     print(WorldKnowledge.summary(knowledge), flush=True)
-    return _play_engine(account, config, memory, knowledge, room_current=True)
+    _assert_commands(player, memory, knowledge)
+    if player is not None:
+        try:
+            BootstrapCompletion(memory).publish(player)
+        except KmError as exc:
+            memory.session.bootstrap.error = str(exc)
+            logger.warning("Bootstrap completion was not asserted: %s", exc)
+    print(f"Bootstrap: {memory.session.bootstrap.status}.", flush=True)
+    return _play_engine(account, config, memory, knowledge, player=player, room_current=False, channel=bootstrapper.channel)
 
 
-def _play_engine(account: AccountSession, config: AgentConfig, memory: WorkingMemory, knowledge: WorldKnowledge, *,
-                 room_current: bool) -> GameplayEngine:
+def _assert_commands(player: KmPlayer | None, memory: WorkingMemory, knowledge: WorldKnowledge) -> None:
+    """Store the learned commands in the player situation. A KM failure is reported and play continues."""
+    if player is None:
+        return
+    try:
+        assert_learned(player, memory, knowledge)
+    except KmError as exc:
+        logger.warning("Learned commands were not asserted: %s", exc)
+        print(f"Learned commands were not asserted: {exc}", file=sys.stderr)
+
+
+def _play_engine(account: AccountSession, config: AgentConfig, memory: WorkingMemory, knowledge: WorldKnowledge, *, player: KmPlayer | None = None, room_current: bool, channel: CommandChannel | None = None) -> GameplayEngine:
     """The loop for this login. A bootstrap that just ran already has the current room."""
-    channel = CommandChannel(account.session.client, replace_existing=config.telnet_replace_existing)
+    channel = channel if channel is not None else CommandChannel(account.session.client, replace_existing=config.telnet_replace_existing)
     km = _km_client(config)
-    return GameplayEngine(channel, memory, knowledge, km, goal=config.level_goal, room_current=room_current)
+    return GameplayEngine(channel, memory, knowledge, km, goal=config.level_goal, room_current=room_current, player=player)
 
 
 def _km_client(config: AgentConfig) -> KmClient:
-    return KmClient(config.km_base_url, query_path=config.km_query_path, assertions_path=config.km_assertions_path,
-                    baseline_path=config.km_baseline_path, players_path=config.km_players_path)
+    return KmClient(config.km_base_url, query_path=config.km_query_path, assertions_path=config.km_assertions_path, baseline_path=config.km_baseline_path, players_path=config.km_players_path)
 
 
 def _load_prompts(config: AgentConfig, auth_client: AuthClient | None) -> dict:
@@ -260,8 +267,7 @@ def configure_logging(log_directory: str) -> str:
     """Write INFO logs to `agent.log` in `log_directory`. Returns that file path."""
     os.makedirs(log_directory, exist_ok=True)
     log_file = os.path.join(log_directory, "agent.log")
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-                        handlers=[logging.FileHandler(log_file, encoding="utf-8"), logging.StreamHandler()], force=True)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s", handlers=[logging.FileHandler(log_file, encoding="utf-8"), logging.StreamHandler()], force=True)
     logger.info("Log file %s.", log_file)
     return log_file
 
